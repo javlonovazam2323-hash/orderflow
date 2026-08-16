@@ -1,8 +1,10 @@
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import { buildReceiptData, downloadEscPos, printThermalReceipt } from '@/lib/receipt/thermal'
+import { isBluetoothPrintSupported, printViaBluetooth } from '@/lib/receipt/bluetooth'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { PAYMENT_METHOD_LABELS, type Order, type OrderItem, type Payment, type RestaurantSettings } from '@/types/database'
+import { useState } from 'react'
 
 interface ReceiptViewProps {
   order: Order
@@ -18,6 +20,20 @@ export function ReceiptView({
   order, items, payments, settings, tableNumber, waiterName, onClose,
 }: ReceiptViewProps) {
   const receiptData = buildReceiptData(order, items, payments, settings, tableNumber, waiterName)
+  const [btLoading, setBtLoading] = useState(false)
+  const [btError, setBtError] = useState('')
+
+  const handleBluetoothPrint = async () => {
+    setBtLoading(true)
+    setBtError('')
+    try {
+      await printViaBluetooth(receiptData)
+    } catch (e) {
+      setBtError(e instanceof Error ? e.message : 'Bluetooth xatolik')
+    } finally {
+      setBtLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-full p-4 max-w-sm mx-auto">
@@ -77,6 +93,12 @@ export function ReceiptView({
             📄 Oddiy
           </Button>
         </div>
+        {isBluetoothPrintSupported() && (
+          <Button variant="outline" loading={btLoading} onClick={handleBluetoothPrint}>
+            📶 Bluetooth printer
+          </Button>
+        )}
+        {btError && <p className="text-xs text-red-500 text-center">{btError}</p>}
         <Button
           variant="ghost"
           size="sm"

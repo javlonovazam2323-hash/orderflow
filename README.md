@@ -39,30 +39,14 @@ npm run dev
 
 ## Production (Supabase)
 
-1. [Supabase](https://supabase.com) da yangi loyiha yarating
-2. `.env.example` dan `.env` nusxalang:
+Batafsil qo'llanma: **[docs/DEPLOY.md](docs/DEPLOY.md)**
 
-```env
-VITE_SUPABASE_URL=https://xxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
-VITE_USE_MOCK=false
-```
+Qisqa:
 
-3. Migratsiyani ishga tushiring:
-
-```bash
-npx supabase init
-npx supabase db push
-# yoki SQL Editor da supabase/migrations/20260816100000_initial_schema.sql
-# va supabase/seed.sql ni bajaring
-```
-
-4. Auth foydalanuvchilarni yarating va `profiles` jadvaliga ulang:
-
-```sql
-INSERT INTO profiles (id, full_name, role)
-VALUES ('auth-user-uuid', 'Sardor', 'waiter');
-```
+1. Supabase da yangi loyiha yarating
+2. Migratsiyalar + seed ishga tushiring
+3. `seed-auth.sql` bilan foydalanuvchilarni ulang
+4. `.env` sozlang va `npm run build`
 
 ## Arxitektura
 
@@ -90,3 +74,6 @@ src/
 - [x] PIN login
 - [x] Termoprinter integratsiyasi (ESC/POS + 80mm)
 - [x] Offline queue (navbat + idempotency)
+- [x] PWA offline cache + install prompt
+- [x] Bluetooth ESC/POS printer
+- [x] Production deploy qo'llanmasi

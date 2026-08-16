@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from 'react'
 import { AuthProvider } from '@/hooks/useAuth'
 import { useThemeStore } from '@/stores/themeStore'
 import { OfflineBanner } from '@/components/shared/OfflineBanner'
+import { PwaPrompts } from '@/components/shared/PwaPrompts'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <AuthProvider>
         <ThemeInit>
           <OfflineBanner />
+          <PwaPrompts />
           {children}
         </ThemeInit>
       </AuthProvider>
