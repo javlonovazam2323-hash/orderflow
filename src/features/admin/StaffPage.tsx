@@ -9,7 +9,7 @@ import {
 } from '@/lib/api/staff'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
@@ -128,7 +128,7 @@ export function StaffPage() {
           title="Yangi xodim"
           saving={saving}
           onClose={() => setModal(null)}
-          onSubmit={(data) => handleCreate(data as CreateStaffInput)}
+          onSubmit={(data) => handleCreate(data as unknown as CreateStaffInput)}
         />
       )}
 

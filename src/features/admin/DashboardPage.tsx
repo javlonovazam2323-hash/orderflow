@@ -1,25 +1,33 @@
 import { Link } from 'react-router-dom'
-import { useCallback, useState } from 'react'
-import { getCashSession, getKitchenTickets, getOpenOrders, getTables } from '@/lib/api'
+import { useCallback, useMemo, useState } from 'react'
+import { getCashSession, getKitchenTickets, getOpenOrders } from '@/lib/api'
+import { getTableSummaries } from '@/lib/api/tables'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { formatCurrency } from '@/lib/format'
+import {
+  DISPLAY_CATEGORY_META,
+  countByCategory,
+  getDisplayCategory,
+  type TableDisplayCategory,
+} from '@/lib/tables/status'
 import { Card, CardContent } from '@/components/ui/Card'
-import type { CashSessionSummary } from '@/types/database'
+import type { CashSessionSummary, TableSummary } from '@/types/database'
 
 export function DashboardPage() {
   const [session, setSession] = useState<CashSessionSummary | null>(null)
-  const [stats, setStats] = useState({ occupied: 0, openOrders: 0, kitchenActive: 0, ready: 0 })
+  const [tables, setTables] = useState<TableSummary[]>([])
+  const [stats, setStats] = useState({ openOrders: 0, kitchenActive: 0, ready: 0 })
 
   const refresh = useCallback(async () => {
-    const [cash, tables, orders, tickets] = await Promise.all([
+    const [cash, tableRows, orders, tickets] = await Promise.all([
       getCashSession(),
-      getTables(),
+      getTableSummaries(),
       getOpenOrders(),
       getKitchenTickets(),
     ])
     setSession(cash)
+    setTables(tableRows)
     setStats({
-      occupied: tables.filter((t) => t.status !== 'empty').length,
       openOrders: orders.length,
       kitchenActive: tickets.filter((t) => !['ready', 'cancelled'].includes(t.status)).length,
       ready: tickets.filter((t) => t.status === 'ready').length,
@@ -28,9 +36,12 @@ export function DashboardPage() {
 
   useRealtimeRefresh(refresh, [refresh])
 
+  const counts = useMemo(() => countByCategory(tables), [tables])
+  const occupiedCount = counts.occupied + counts.awaiting_payment
+
   const kpis = [
     { label: 'Bugungi savdo', value: formatCurrency(session?.total_revenue ?? 0), icon: '💰' },
-    { label: 'Band stollar', value: String(stats.occupied), icon: '🪑' },
+    { label: 'Band stollar', value: String(occupiedCount), icon: '🪑' },
     { label: 'Ochiq hisoblar', value: String(stats.openOrders), icon: '📋' },
     { label: 'Oshxona aktiv', value: String(stats.kitchenActive), icon: '🍳' },
     { label: 'Tayyor', value: String(stats.ready), icon: '✅' },
@@ -38,6 +49,7 @@ export function DashboardPage() {
   ]
 
   const quickLinks = [
+    { to: '/admin/tables', label: 'Stollar', icon: '🪑' },
     { to: '/admin/menu', label: 'Menyu boshqaruvi', icon: '📋' },
     { to: '/admin/staff', label: 'Xodimlar', icon: '👤' },
     { to: '/admin/reports', label: 'Kunlik hisobot', icon: '📈' },
@@ -45,6 +57,11 @@ export function DashboardPage() {
     { to: '/admin/settings', label: 'Sozlamalar', icon: '⚙️' },
     { to: '/cashier', label: 'Kassa', icon: '💰' },
   ]
+
+  const highlightTables = tables.filter((t) => {
+    const c = getDisplayCategory(t.status)
+    return c === 'occupied' || c === 'awaiting_payment'
+  })
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
@@ -65,7 +82,41 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      <Card>
+        <CardContent className="pt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Stollar holati</h2>
+            <Link to="/admin/tables" className="text-sm text-brand-600 font-medium">Barchasi →</Link>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {(['empty', 'occupied', 'reserved', 'awaiting_payment'] as TableDisplayCategory[]).map((key) => (
+              <Link
+                key={key}
+                to="/admin/tables"
+                className="px-3 py-1.5 rounded-xl border border-border hover:bg-surface-2"
+              >
+                {DISPLAY_CATEGORY_META[key].emoji} {counts[key]} {DISPLAY_CATEGORY_META[key].label}
+              </Link>
+            ))}
+          </div>
+          {highlightTables.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {highlightTables.slice(0, 8).map((t) => (
+                <Link
+                  key={t.id}
+                  to={`/admin/tables?table=${t.id}`}
+                  className="text-xs px-2 py-1 rounded-lg bg-surface-2 border border-border hover:border-brand-500"
+                >
+                  Stol {t.number}
+                  {t.order_total > 0 ? ` · ${formatCurrency(t.order_total)}` : ''}
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {quickLinks.map((link) => (
           <Link
             key={link.to}

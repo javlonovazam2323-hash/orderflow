@@ -77,9 +77,12 @@ function defaultState(): MockState {
     tables: Array.from({ length: 30 }, (_, i) => ({
       id: `t${i + 1}`,
       number: i + 1,
+      name: null,
       status: 'empty' as const,
       current_order_id: null,
       capacity: 4,
+      zone: 'Asosiy zal',
+      is_active: true,
     })),
     categories: [...DEFAULT_CATEGORIES],
     menu: [...DEFAULT_MENU],
@@ -289,6 +292,7 @@ class MockStore {
 
     const waiterMap: Record<string, { name: string; total: number; count: number }> = {}
     for (const o of orders) {
+      if (!o.waiter_id) continue
       const waiter = USERS.find((u) => u.id === o.waiter_id)
       if (!waiterMap[o.waiter_id]) waiterMap[o.waiter_id] = { name: waiter?.full_name ?? '—', total: 0, count: 0 }
       waiterMap[o.waiter_id].total += o.total
@@ -344,9 +348,23 @@ class MockStore {
       const order: Order = {
         id: orderId,
         order_number: String(this.state.orderSeq).padStart(6, '0'),
+        order_type: 'dine_in',
         table_id: tableId,
         waiter_id: waiterId,
+        created_by: waiterId,
         status: 'open',
+        fulfillment_status: null,
+        customer_name: null,
+        customer_phone: null,
+        delivery_address: null,
+        delivery_landmark: null,
+        delivery_fee: 0,
+        discount_amount: 0,
+        notes: null,
+        payment_method_preference: null,
+        scheduled_ready_at: null,
+        scheduled_delivery_at: null,
+        courier_id: null,
         subtotal: 0,
         service_charge: 0,
         tax_amount: 0,
@@ -354,6 +372,10 @@ class MockStore {
         guest_count: 1,
         opened_at: new Date().toISOString(),
         closed_at: null,
+        kitchen_ready_at: null,
+        dispatched_at: null,
+        delivered_at: null,
+        picked_up_at: null,
       }
       this.state.orders.push(order)
       table.status = 'occupied'
@@ -395,7 +417,7 @@ class MockStore {
     this.state.ticketSeq += 1
     const ticketId = uid()
     const order = this.state.orders.find((o) => o.id === orderId)!
-    const table = this.state.tables.find((t) => t.id === order.table_id)!
+    const table = order.table_id ? this.state.tables.find((t) => t.id === order.table_id) : undefined
 
     const ticket: KitchenTicket = {
       id: ticketId,
@@ -403,6 +425,7 @@ class MockStore {
       order_id: orderId,
       table_id: order.table_id,
       waiter_id: order.waiter_id,
+      order_type: order.order_type,
       status: 'new',
       sent_at: new Date().toISOString(),
       accepted_at: null,
@@ -428,7 +451,7 @@ class MockStore {
     }
 
     this.recalcOrder(orderId)
-    table.status = 'has_order'
+    if (table) table.status = 'has_order'
     order.status = 'open'
     this.emit()
     return ticketId
@@ -440,8 +463,9 @@ class MockStore {
       .sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime())
       .map((t) => ({
         ...t,
-        table: this.state.tables.find((tb) => tb.id === t.table_id),
-        waiter: USERS.find((u) => u.id === t.waiter_id),
+        table: t.table_id ? this.state.tables.find((tb) => tb.id === t.table_id) : undefined,
+        waiter: t.waiter_id ? USERS.find((u) => u.id === t.waiter_id) : undefined,
+        order: this.state.orders.find((o) => o.id === t.order_id),
         items: this.state.orderItems
           .filter((i) => i.kitchen_ticket_id === t.id)
           .map((i) => ({ ...i, menu_item: this.findMenuItem(i.menu_item_id) })),
@@ -455,26 +479,33 @@ class MockStore {
     if (status === 'accepted') ticket.accepted_at = now
     if (status === 'in_progress') {
       ticket.started_at = now
-      this.state.tables.find((t) => t.id === ticket.table_id)!.status = 'preparing'
+      const table = ticket.table_id ? this.state.tables.find((t) => t.id === ticket.table_id) : undefined
+      if (table) table.status = 'preparing'
     }
     if (status === 'ready') {
       ticket.ready_at = now
-      const table = this.state.tables.find((t) => t.id === ticket.table_id)!
-      const tableNum = table.number
-      this.state.notifications.unshift({
-        id: uid(),
-        user_id: ticket.waiter_id,
-        type: 'order_ready',
-        title: 'Buyurtma tayyor!',
-        body: `🔔 Stol ${tableNum} buyurtmasi tayyor!`,
-        data: { ticket_id: ticketId, table_id: ticket.table_id },
-        is_read: false,
-        created_at: now,
-      })
+      const notifyUserId = ticket.waiter_id ?? this.state.orders.find((o) => o.id === ticket.order_id)?.created_by
+      if (notifyUserId) {
+        const table = ticket.table_id ? this.state.tables.find((t) => t.id === ticket.table_id) : undefined
+        const tableNum = table?.number
+        this.state.notifications.unshift({
+          id: uid(),
+          user_id: notifyUserId,
+          type: 'order_ready',
+          title: 'Buyurtma tayyor!',
+          body: tableNum ? `🔔 Stol ${tableNum} buyurtmasi tayyor!` : 'Buyurtma tayyor!',
+          data: { ticket_id: ticketId, table_id: ticket.table_id },
+          is_read: false,
+          created_at: now,
+        })
+      }
       const allReady = this.state.kitchenTickets
         .filter((t) => t.order_id === ticket.order_id && t.status !== 'cancelled')
         .every((t) => t.status === 'ready')
-      if (allReady) table.status = 'ready'
+      if (allReady && ticket.table_id) {
+        const tbl = this.state.tables.find((t) => t.id === ticket.table_id)
+        if (tbl) tbl.status = 'ready'
+      }
     }
     this.state.orderItems
       .filter((i) => i.kitchen_ticket_id === ticketId)
@@ -618,6 +649,48 @@ class MockStore {
   setStaffPin(profileId: string, pin: string | null) {
     const user = USERS.find((u) => u.id === profileId)
     if (user) user.pin = pin
+  }
+
+  getTableSummaries(activeOnly = true): import('@/types/database').TableSummary[] {
+    const tables = activeOnly ? this.state.tables.filter((t) => t.is_active) : this.state.tables
+    return tables.map((t) => {
+      const order = t.current_order_id
+        ? this.state.orders.find((o) => o.id === t.current_order_id)
+        : null
+      const items = order
+        ? this.state.orderItems.filter((i) => i.order_id === order.id && i.status !== 'cancelled')
+        : []
+      const paid = order
+        ? this.state.payments.filter((p) => p.order_id === order.id).reduce((s, p) => s + p.amount, 0)
+        : 0
+      const waiter = order ? USERS.find((u) => u.id === order.waiter_id) : null
+      return {
+        id: t.id,
+        number: t.number,
+        name: t.name,
+        status: t.status,
+        capacity: t.capacity,
+        zone: t.zone,
+        is_active: t.is_active,
+        current_order_id: t.current_order_id,
+        order_number: order?.order_number ?? null,
+        waiter_id: order?.waiter_id ?? null,
+        order_status: order?.status ?? null,
+        order_total: order?.total ?? 0,
+        guest_count: order?.guest_count ?? null,
+        opened_at: order?.opened_at ?? null,
+        waiter_name: waiter?.full_name ?? null,
+        item_count: items.length,
+        paid_total: paid,
+        balance_due: Math.max((order?.total ?? 0) - paid, 0),
+        reservation_id: null,
+        reservation_name: null,
+        reservation_phone: null,
+        reserved_for: null,
+        reservation_guests: null,
+        reservation_notes: null,
+      }
+    })
   }
 }
 

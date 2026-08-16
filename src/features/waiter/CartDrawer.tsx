@@ -17,7 +17,7 @@ interface CartDrawerProps {
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const navigate = useNavigate()
-  const { items, orderId, updateQuantity, updateNotes, removeItem, clear, total } = useCartStore()
+  const { items, orderId, updateQuantity, updateNotes, clear, total } = useCartStore()
   const { refreshPending } = useOnlineStatus()
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')

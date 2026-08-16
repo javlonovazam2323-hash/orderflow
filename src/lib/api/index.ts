@@ -95,13 +95,12 @@ export async function getMenuItems(): Promise<MenuItem[]> {
   return data ?? []
 }
 
-export async function getTables(): Promise<RestaurantTable[]> {
+export async function getTables(activeOnly = true): Promise<RestaurantTable[]> {
   if (USE_MOCK) return mockStore.getTables()
 
-  const { data } = await getSupabase()
-    .from('restaurant_tables')
-    .select('*')
-    .order('number')
+  let query = getSupabase().from('restaurant_tables').select('*').order('number')
+  if (activeOnly) query = query.eq('is_active', true)
+  const { data } = await query
   return data ?? []
 }
 
@@ -174,7 +173,7 @@ export async function getKitchenTickets(): Promise<KitchenTicket[]> {
 
   const { data: tickets } = await getSupabase()
     .from('kitchen_tickets')
-    .select('*, table:restaurant_tables(*), waiter:profiles(*)')
+    .select('*, table:restaurant_tables(*), waiter:profiles(*), order:orders(*)')
     .not('status', 'eq', 'cancelled')
     .order('sent_at')
 
@@ -189,8 +188,9 @@ export async function getKitchenTickets(): Promise<KitchenTicket[]> {
 
     result.push({
       ...t,
-      table: t.table as RestaurantTable,
-      waiter: t.waiter as Profile,
+      table: t.table as RestaurantTable | undefined,
+      waiter: t.waiter as Profile | undefined,
+      order: t.order as Order | undefined,
       items: (items ?? []).map((i) => ({ ...i, menu_item: i.menu_item as MenuItem })),
     })
   }

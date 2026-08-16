@@ -1,4 +1,4 @@
-import type { CartItem, Profile } from '@/types/database'
+import type { CartItem } from '@/types/database'
 
 export type QueueActionType = 'send_to_kitchen'
 

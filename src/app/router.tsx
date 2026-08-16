@@ -7,6 +7,7 @@ import { WaiterLayout } from '@/components/layout/WaiterLayout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { PinLoginPage } from '@/features/auth/PinLoginPage'
+import { TablesPage as AdminTablesPage } from '@/features/admin/TablesPage'
 import { DashboardPage } from '@/features/admin/DashboardPage'
 import { MenuManagementPage } from '@/features/admin/MenuManagementPage'
 import { ReportsPage } from '@/features/admin/ReportsPage'
@@ -14,8 +15,10 @@ import { WaitersStatsPage } from '@/features/admin/WaitersStatsPage'
 import { SetupPage } from '@/features/setup/SetupPage'
 import { StaffPage } from '@/features/admin/StaffPage'
 import { SettingsPage } from '@/features/admin/SettingsPage'
+import { OrdersPage as AdminOrdersPage } from '@/features/orders/OrdersPage'
 import { CashierPage } from '@/features/cashier/CashierPage'
 import { PaymentPage } from '@/features/cashier/PaymentPage'
+import { OrdersPage as StaffOrdersPage } from '@/features/orders/OrdersPage'
 import { KitchenPage } from '@/features/kitchen/KitchenPage'
 import { TablesPage } from '@/features/waiter/TablesPage'
 import { MenuPage } from '@/features/waiter/MenuPage'
@@ -69,12 +72,15 @@ export function AppRouter() {
 
         <Route element={<RoleGuard allowed={['cashier', 'admin']} />}>
           <Route path="/cashier" element={<CashierPage />} />
+          <Route path="/cashier/orders" element={<StaffOrdersPage title="Zakazlar" payBasePath="/cashier/pay" />} />
           <Route path="/cashier/pay/:orderId" element={<PaymentPage />} />
         </Route>
 
         <Route element={<RoleGuard allowed={['admin']} />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<DashboardPage />} />
+            <Route path="/admin/orders" element={<AdminOrdersPage title="Zakazlar" payBasePath="/cashier/pay" />} />
+            <Route path="/admin/tables" element={<AdminTablesPage />} />
             <Route path="/admin/menu" element={<MenuManagementPage />} />
             <Route path="/admin/reports" element={<ReportsPage />} />
             <Route path="/admin/waiters" element={<WaitersStatsPage />} />

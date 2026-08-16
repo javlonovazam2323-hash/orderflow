@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { ReceiptView } from './ReceiptView'
-import { PAYMENT_METHOD_LABELS, type Order, type OrderItem, type Payment, type PaymentMethod, type RestaurantSettings } from '@/types/database'
+import { ORDER_TYPE_ICONS, ORDER_TYPE_LABELS, PAYMENT_METHOD_LABELS, type Order, type OrderItem, type Payment, type PaymentMethod, type RestaurantSettings } from '@/types/database'
 
 const METHODS: PaymentMethod[] = ['cash', 'card', 'click', 'payme', 'other']
 
@@ -103,8 +103,15 @@ export function PaymentPage() {
         <CardContent className="pt-4 space-y-3">
           <div className="flex justify-between">
             <div>
-              <p className="font-bold text-lg">Stol {tableNumber} · № {order.order_number}</p>
-              <p className="text-sm text-muted">{formatDateTime(order.opened_at)}</p>
+              <p className="font-bold text-lg">
+                {order.order_type === 'dine_in'
+                  ? `Stol ${tableNumber ?? '—'} · № ${order.order_number}`
+                  : `${ORDER_TYPE_ICONS[order.order_type]} ${order.order_number}`}
+              </p>
+              {order.order_type !== 'dine_in' && (
+                <p className="text-sm">{order.customer_name} · {order.customer_phone}</p>
+              )}
+              <p className="text-sm text-muted">{ORDER_TYPE_LABELS[order.order_type]} · {formatDateTime(order.opened_at)}</p>
             </div>
           </div>
 
@@ -122,6 +129,16 @@ export function PaymentPage() {
             {order.service_charge > 0 && (
               <div className="flex justify-between text-muted">
                 <span>Xizmat haqi</span><span>{formatCurrency(order.service_charge)}</span>
+              </div>
+            )}
+            {order.delivery_fee > 0 && (
+              <div className="flex justify-between text-muted">
+                <span>Dostavka</span><span>{formatCurrency(order.delivery_fee)}</span>
+              </div>
+            )}
+            {order.discount_amount > 0 && (
+              <div className="flex justify-between text-muted">
+                <span>Chegirma</span><span>−{formatCurrency(order.discount_amount)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-lg pt-1">

@@ -6,10 +6,16 @@ import { elapsedMinutes, formatTime } from '@/lib/format'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { KITCHEN_STATUS_LABELS, type KitchenTicket } from '@/types/database'
+import {
+  KITCHEN_STATUS_LABELS,
+  ORDER_TYPE_ICONS,
+  ORDER_TYPE_LABELS,
+  type KitchenTicket,
+  type OrderType,
+} from '@/types/database'
 
 const STATUS_ACTIONS: Record<string, { next: KitchenTicket['status']; label: string } | null> = {
-  new: { next: 'accepted', label: 'Qabul qilish' },
+  new: { next: 'accepted', label: 'QABUL QILDIM' },
   accepted: { next: 'in_progress', label: 'Jarayonda' },
   in_progress: { next: 'ready', label: 'TAYYOR' },
   ready: null,
@@ -22,6 +28,30 @@ const STATUS_COLORS: Record<string, string> = {
   ready: 'border-green-500 bg-green-50 dark:bg-green-950/30',
 }
 
+function ticketTitle(ticket: KitchenTicket): string {
+  const orderType = (ticket.order?.order_type ?? ticket.order_type ?? 'dine_in') as OrderType
+  if (orderType === 'dine_in' && ticket.table?.number) {
+    return `Stol ${ticket.table.number}`
+  }
+  return ticket.order?.order_number ?? `#${ticket.ticket_number}`
+}
+
+function ticketSubtitle(ticket: KitchenTicket): string {
+  const orderType = (ticket.order?.order_type ?? ticket.order_type ?? 'dine_in') as OrderType
+  if (orderType !== 'dine_in') {
+    const name = ticket.order?.customer_name ?? 'Mijoz'
+    const phone = ticket.order?.customer_phone ?? ''
+    return `${ORDER_TYPE_ICONS[orderType]} ${ORDER_TYPE_LABELS[orderType].toUpperCase()} · ${name}${phone ? ` · ${phone}` : ''}`
+  }
+  return ticket.waiter?.full_name ?? ''
+}
+
+function waitElapsed(sentAt: string, acceptedAt: string | null): string {
+  if (!acceptedAt) return `${elapsedMinutes(sentAt)} daq`
+  const mins = Math.floor((Date.now() - new Date(acceptedAt).getTime()) / 60000)
+  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
+}
+
 export function KitchenPage() {
   const { signOut } = useAuth()
   const [tickets, setTickets] = useState<KitchenTicket[]>([])
@@ -32,16 +62,6 @@ export function KitchenPage() {
   }, [])
 
   useRealtimeRefresh(refresh, [refresh])
-
-  const handleStatus = async (ticketId: string, status: KitchenTicket['status']) => {
-    setUpdating(ticketId)
-    try {
-      await updateKitchenStatus(ticketId, status)
-      await refresh()
-    } finally {
-      setUpdating(null)
-    }
-  }
 
   const active = tickets.filter((t) => t.status !== 'ready')
   const ready = tickets.filter((t) => t.status === 'ready')
@@ -61,7 +81,8 @@ export function KitchenPage() {
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
         {tickets.map((ticket) => {
           const action = STATUS_ACTIONS[ticket.status]
-          const elapsed = elapsedMinutes(ticket.sent_at)
+          const orderType = (ticket.order?.order_type ?? ticket.order_type ?? 'dine_in') as OrderType
+          const isPhone = orderType !== 'dine_in'
 
           return (
             <Card
@@ -69,13 +90,18 @@ export function KitchenPage() {
               className={`border-l-4 ${STATUS_COLORS[ticket.status] ?? ''}`}
             >
               <CardContent className="pt-4 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-3xl font-black">Stol {ticket.table?.number}</p>
-                    <p className="text-sm text-muted">#{ticket.ticket_number} · {formatTime(ticket.sent_at)}</p>
-                    <p className="text-sm">{ticket.waiter?.full_name}</p>
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <p className="text-2xl font-black truncate">{ticketTitle(ticket)}</p>
+                    <p className="text-sm font-semibold text-brand-600 dark:text-brand-400 mt-0.5">
+                      {ticketSubtitle(ticket)}
+                    </p>
+                    <p className="text-xs text-muted mt-1">
+                      Qabul: {formatTime(ticket.sent_at)}
+                      {ticket.accepted_at && ` · Kutish: ${waitElapsed(ticket.sent_at, ticket.accepted_at)}`}
+                    </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <Badge className={
                       ticket.status === 'new' ? 'bg-red-500 text-white animate-pulse' :
                       ticket.status === 'ready' ? 'bg-green-500 text-white' :
@@ -83,23 +109,28 @@ export function KitchenPage() {
                     }>
                       {KITCHEN_STATUS_LABELS[ticket.status]}
                     </Badge>
-                    <p className="text-xs text-muted mt-1">{elapsed} daq</p>
                   </div>
                 </div>
 
                 <ul className="space-y-2">
                   {ticket.items?.map((item) => (
-                    <li key={item.id} className="flex justify-between text-sm border-b border-border pb-2">
-                      <div>
-                        <span className="font-bold text-base">{item.quantity}×</span>{' '}
-                        {item.menu_item?.name}
-                        {item.notes && (
-                          <p className="text-amber-600 text-xs mt-0.5">⚠ {item.notes}</p>
-                        )}
-                      </div>
+                    <li key={item.id} className="text-sm border-b border-border pb-2">
+                      <span className="font-bold text-base">{item.quantity}×</span>{' '}
+                      {item.menu_item?.name}
+                      {item.notes && (
+                        <p className="text-amber-600 text-xs mt-0.5 bg-amber-500/10 rounded px-2 py-1 inline-block">
+                          Izoh: {item.notes}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>
+
+                {isPhone && ticket.order?.notes && (
+                  <p className="text-xs text-muted border-t border-border pt-2">
+                    Umumiy izoh: {ticket.order.notes}
+                  </p>
+                )}
 
                 {action && (
                   <Button
@@ -107,7 +138,12 @@ export function KitchenPage() {
                     className="w-full"
                     loading={updating === ticket.id}
                     variant={ticket.status === 'in_progress' ? 'primary' : 'secondary'}
-                    onClick={() => handleStatus(ticket.id, action.next)}
+                    onClick={() => {
+                      setUpdating(ticket.id)
+                      updateKitchenStatus(ticket.id, action.next)
+                        .then(refresh)
+                        .finally(() => setUpdating(null))
+                    }}
                   >
                     {action.label}
                   </Button>

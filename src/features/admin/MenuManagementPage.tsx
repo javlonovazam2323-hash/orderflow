@@ -1,22 +1,19 @@
-import { Link } from 'react-router-dom'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   createCategory,
   createMenuItem,
   deleteCategory,
-  deleteMenuItem,
   getAdminCategories,
   getAdminMenuItems,
   updateCategory,
   updateMenuItem,
 } from '@/lib/api/admin'
+import { deleteMenuImageFromUrl, uploadMenuImage } from '@/lib/storage/menuImages'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
-import { formatCurrency } from '@/lib/format'
+import { MenuItemCard } from '@/components/menu/MenuItemCard'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Badge } from '@/components/ui/Badge'
 import type { MenuCategory, MenuItem, MenuCategoryInput, MenuItemInput } from '@/types/database'
 
 export function MenuManagementPage() {
@@ -90,44 +87,19 @@ export function MenuManagementPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.map((item) => (
-          <Card key={item.id}>
-            <CardContent className="pt-3 space-y-2">
-              <div className="flex gap-3">
-                <div className="w-16 h-16 rounded-xl overflow-hidden bg-surface-2 shrink-0">
-                  {item.image_url ? (
-                    <img src={item.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">🍽️</div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{item.name}</p>
-                  <p className="text-brand-600 font-bold text-sm">{formatCurrency(item.price)}</p>
-                  <div className="flex gap-1 mt-1">
-                    <Badge className={item.is_available ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                      {item.is_available ? 'Mavjud' : 'Yo\'q'}
-                    </Badge>
-                    <Badge className="bg-surface-2 text-muted">{item.prep_time_minutes} daq</Badge>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="flex-1" onClick={() => setItemModal(item)}>Tahrirlash</Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    if (confirm('O\'chirish?')) { await deleteMenuItem(item.id); refresh() }
-                  }}
-                >
-                  🗑
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filtered.map((item) => {
+          const cat = categories.find((c) => c.id === item.category_id)
+          return (
+            <MenuItemCard
+              key={item.id}
+              item={item}
+              category={cat}
+              showAdd={false}
+              onEdit={() => setItemModal(item)}
+            />
+          )
+        })}
       </div>
 
       {catModal && (
@@ -214,6 +186,25 @@ function ItemFormModal({
   const [prepTime, setPrepTime] = useState(String(item?.prep_time_minutes ?? 15))
   const [imageUrl, setImageUrl] = useState(item?.image_url ?? '')
   const [isAvailable, setIsAvailable] = useState(item?.is_available ?? true)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleImageUpload = async (file: File) => {
+    setUploading(true)
+    setUploadError('')
+    try {
+      if (item?.image_url?.includes('menu-images')) {
+        await deleteMenuImageFromUrl(item.image_url).catch(() => {})
+      }
+      const url = await uploadMenuImage(file, item?.id)
+      setImageUrl(url)
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Yuklash xatoligi')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <Modal open onClose={onClose} title={item ? 'Mahsulot tahrirlash' : 'Yangi mahsulot'}>
@@ -234,7 +225,43 @@ function ItemFormModal({
           </select>
         </label>
         <Input label="Tayyorlanish vaqti (daq)" type="number" value={prepTime} onChange={(e) => setPrepTime(e.target.value)} />
-        <Input label="Rasm URL" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." />
+
+        <div className="space-y-2">
+          <span className="text-sm font-medium">Rasm yuklash</span>
+          <div className="flex gap-3 items-start">
+            <div className="w-24 h-24 rounded-xl bg-surface-2 overflow-hidden shrink-0">
+              {imageUrl ? (
+                <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-2xl text-muted">🍽️</div>
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleImageUpload(f)
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={uploading}
+                onClick={() => fileRef.current?.click()}
+              >
+                Rasm tanlash
+              </Button>
+              <p className="text-xs text-muted">JPG, PNG, WEBP · avtomatik siqiladi</p>
+              {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+            </div>
+          </div>
+        </div>
+
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isAvailable} onChange={(e) => setIsAvailable(e.target.checked)} />
           Mavjud

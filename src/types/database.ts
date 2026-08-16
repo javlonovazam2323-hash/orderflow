@@ -7,8 +7,26 @@ export type TableStatus =
   | 'preparing'
   | 'ready'
   | 'awaiting_payment'
+  | 'reserved'
+  | 'cleaning'
+
+export type ReservationStatus = 'active' | 'checked_in' | 'cancelled' | 'no_show'
 
 export type OrderStatus = 'draft' | 'open' | 'awaiting_payment' | 'paid' | 'cancelled'
+
+export type OrderType = 'dine_in' | 'pickup' | 'delivery'
+
+export type FulfillmentStatus =
+  | 'new'
+  | 'in_kitchen'
+  | 'ready'
+  | 'awaiting_pickup'
+  | 'picked_up'
+  | 'dispatched'
+  | 'in_transit'
+  | 'delivered'
+  | 'completed'
+  | 'cancelled'
 
 export type KitchenTicketStatus = 'new' | 'accepted' | 'in_progress' | 'ready' | 'cancelled'
 
@@ -24,9 +42,57 @@ export interface Profile {
 export interface RestaurantTable {
   id: string
   number: number
+  name: string | null
   status: TableStatus
   current_order_id: string | null
   capacity: number
+  zone: string | null
+  is_active: boolean
+}
+
+export interface TableSummary {
+  id: string
+  number: number
+  name: string | null
+  status: TableStatus
+  capacity: number
+  zone: string | null
+  is_active: boolean
+  current_order_id: string | null
+  order_number: string | null
+  waiter_id: string | null
+  order_status: OrderStatus | null
+  order_total: number
+  guest_count: number | null
+  opened_at: string | null
+  waiter_name: string | null
+  item_count: number
+  paid_total: number
+  balance_due: number
+  reservation_id: string | null
+  reservation_name: string | null
+  reservation_phone: string | null
+  reserved_for: string | null
+  reservation_guests: number | null
+  reservation_notes: string | null
+}
+
+export interface TableReservationInput {
+  table_id: string
+  customer_name: string
+  phone?: string
+  reserved_for: string
+  guest_count: number
+  notes?: string
+}
+
+export interface TableUpsertInput {
+  number: number
+  capacity: number
+  zone: string
+  name?: string | null
+  is_active?: boolean
+  table_id?: string
 }
 
 export interface MenuCategory {
@@ -52,9 +118,23 @@ export interface MenuItem {
 export interface Order {
   id: string
   order_number: string
-  table_id: string
-  waiter_id: string
+  order_type: OrderType
+  table_id: string | null
+  waiter_id: string | null
+  created_by: string | null
   status: OrderStatus
+  fulfillment_status: FulfillmentStatus | null
+  customer_name: string | null
+  customer_phone: string | null
+  delivery_address: string | null
+  delivery_landmark: string | null
+  delivery_fee: number
+  discount_amount: number
+  notes: string | null
+  payment_method_preference: PaymentMethod | null
+  scheduled_ready_at: string | null
+  scheduled_delivery_at: string | null
+  courier_id: string | null
   subtotal: number
   service_charge: number
   tax_amount: number
@@ -62,6 +142,53 @@ export interface Order {
   guest_count: number
   opened_at: string
   closed_at: string | null
+  kitchen_ready_at: string | null
+  dispatched_at: string | null
+  delivered_at: string | null
+  picked_up_at: string | null
+}
+
+export interface OrderSummary extends Order {
+  table_number: number | null
+  created_by_name: string | null
+  waiter_name: string | null
+  courier_name: string | null
+  paid_total: number
+  balance_due: number
+  item_count: number
+}
+
+export interface OrderEvent {
+  id: string
+  order_id: string
+  event_type: string
+  message: string
+  actor_id: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface PhoneOrderItemInput {
+  menu_item_id: string
+  quantity: number
+  notes?: string | null
+}
+
+export interface CreatePhoneOrderInput {
+  order_type: 'pickup' | 'delivery'
+  customer_name: string
+  customer_phone: string
+  items: PhoneOrderItemInput[]
+  notes?: string | null
+  scheduled_ready_at?: string | null
+  scheduled_delivery_at?: string | null
+  delivery_address?: string | null
+  delivery_landmark?: string | null
+  delivery_fee?: number
+  discount_amount?: number
+  payment_method?: PaymentMethod | null
+  prepayment_amount?: number
+  idempotency_key?: string
 }
 
 export interface OrderItem {
@@ -83,8 +210,9 @@ export interface KitchenTicket {
   id: string
   ticket_number: number
   order_id: string
-  table_id: string
-  waiter_id: string
+  table_id: string | null
+  waiter_id: string | null
+  order_type?: OrderType
   status: KitchenTicketStatus
   sent_at: string
   accepted_at: string | null
@@ -92,6 +220,7 @@ export interface KitchenTicket {
   ready_at: string | null
   table?: RestaurantTable
   waiter?: Profile
+  order?: Order
   items?: OrderItem[]
 }
 
@@ -204,6 +333,8 @@ export const TABLE_STATUS_LABELS: Record<TableStatus, string> = {
   preparing: 'Tayyorlanmoqda',
   ready: 'Tayyor',
   awaiting_payment: 'Hisob kutilmoqda',
+  reserved: 'Bron qilingan',
+  cleaning: 'Tozalash',
 }
 
 export const TABLE_STATUS_COLORS: Record<TableStatus, string> = {
@@ -213,6 +344,8 @@ export const TABLE_STATUS_COLORS: Record<TableStatus, string> = {
   preparing: 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300',
   ready: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
   awaiting_payment: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
+  reserved: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300',
+  cleaning: 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-300',
 }
 
 export const KITCHEN_STATUS_LABELS: Record<KitchenTicketStatus, string> = {
@@ -229,4 +362,29 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   click: 'Click',
   payme: 'Payme',
   other: 'Boshqa',
+}
+
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  dine_in: 'Stol',
+  pickup: 'Olib ketish',
+  delivery: 'Dostavka',
+}
+
+export const ORDER_TYPE_ICONS: Record<OrderType, string> = {
+  dine_in: '🍽️',
+  pickup: '🥡',
+  delivery: '🛵',
+}
+
+export const FULFILLMENT_STATUS_LABELS: Record<FulfillmentStatus, string> = {
+  new: 'Yangi',
+  in_kitchen: 'Oshxonada',
+  ready: 'Tayyor',
+  awaiting_pickup: 'Olib ketishga tayyor',
+  picked_up: 'Olib ketdi',
+  dispatched: 'Dostavkaga berildi',
+  in_transit: 'Yo\'lda',
+  delivered: 'Yetkazildi',
+  completed: 'Yakunlandi',
+  cancelled: 'Bekor qilindi',
 }
