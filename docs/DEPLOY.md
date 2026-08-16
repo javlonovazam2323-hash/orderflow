@@ -13,6 +13,7 @@ Supabase Dashboard → **SQL Editor** → ketma-ket bajaring:
 ```
 supabase/migrations/20260816100000_initial_schema.sql
 supabase/migrations/20260816110000_pin_login.sql
+supabase/migrations/20260816120000_staff_management.sql
 supabase/seed.sql
 ```
 
@@ -27,18 +28,43 @@ supabase db push
 
 ## 3. Auth foydalanuvchilar
 
-Dashboard → **Authentication** → **Users** → har biri uchun:
+**Usul A — Saytdan (tavsiya):**
 
-| Email | Parol | Rol |
-|-------|-------|-----|
-| admin@orderflow.uz | (kuchli parol) | admin |
-| kassir@orderflow.uz | ... | cashier |
-| ofitsiant@orderflow.uz | ... | waiter |
-| oshxona@orderflow.uz | ... | kitchen |
+1. `.env` ni to'ldiring va Edge Functions deploy qiling (4-bo'lim)
+2. Saytni oching → avtomatik `/setup` sahifasi
+3. **Xodimlarni yaratish** tugmasini bosing
 
-UUID ni nusxalang va `supabase/seed-auth.sql` ni tahrirlab ishga tushiring.
+**Usul B — CLI:**
 
-## 4. Realtime yoqish
+```bash
+# .env ga SUPABASE_SERVICE_ROLE_KEY qo'shing
+node scripts/setup-staff.mjs
+```
+
+**Usul C — SQL (auth users allaqachon bo'lsa):**
+
+`supabase/seed-auth.sql` ni SQL Editor da bajaring.
+
+| Email | Parol | Rol | PIN |
+|-------|-------|-----|-----|
+| admin@orderflow.uz | demo1234 | admin | — |
+| kassir@orderflow.uz | demo1234 | cashier | 0000 |
+| ofitsiant@orderflow.uz | demo1234 | waiter | 1234 |
+| oshxona@orderflow.uz | demo1234 | kitchen | 5678 |
+
+Keyinchalik **Admin → Xodimlar** bo'limidan o'zgartiring.
+
+## 4. Edge Functions
+
+```bash
+supabase functions deploy bootstrap-staff
+supabase functions deploy manage-staff
+supabase functions deploy pin-login
+```
+
+Functions avtomatik `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` oladi.
+
+## 5. Realtime yoqish
 
 Dashboard → **Database** → **Publications** — `supabase_realtime` publication da quyidagi jadvallar bo'lishi kerak:
 
@@ -49,7 +75,7 @@ Dashboard → **Database** → **Publications** — `supabase_realtime` publicat
 
 (Migratsiyada qo'shilgan)
 
-## 5. Frontend env
+## 6. Frontend env
 
 ```bash
 cp .env.example .env
@@ -63,7 +89,7 @@ VITE_USE_MOCK=false
 
 **Muhim:** `service_role` keyni frontendga qo'ymang!
 
-## 6. Build va deploy
+## 7. Build va deploy
 
 ### Vercel / Netlify
 
@@ -92,7 +118,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 ```
 
-## 7. PWA (HTTPS shart)
+## 8. PWA (HTTPS shart)
 
 Production HTTPS da PWA avtomatik ishlaydi:
 
@@ -100,17 +126,13 @@ Production HTTPS da PWA avtomatik ishlaydi:
 - "Ilovani o'rnatish" taklifi
 - Avtomatik yangilanish
 
-## 8. PIN sozlash (production)
+## 9. PIN login
 
-```sql
-UPDATE profiles
-SET pin_hash = crypt('1234', gen_salt('bf'))
-WHERE role = 'waiter' AND full_name = 'Sardor';
-```
+PIN auth `pin-login` Edge Function orqali ishlaydi (session yaratadi).
 
-PIN auth uchun Edge Function tavsiya etiladi — `sign_in_with_pin` RPC faqat profil lookup.
+Admin panel → **Xodimlar** dan PIN o'rnating.
 
-## 9. Tekshirish ro'yxati
+## 10. Tekshirish ro'yxati
 
 - [ ] Login (har rol)
 - [ ] PIN login (ofitsiant)
@@ -120,7 +142,7 @@ PIN auth uchun Edge Function tavsiya etiladi — `sign_in_with_pin` RPC faqat pr
 - [ ] Admin menyu CRUD
 - [ ] RLS: ofitsiant boshqa rol ma'lumotlarini ko'ra olmasin
 
-## 10. Monitoring
+## 11. Monitoring
 
 Supabase Dashboard:
 

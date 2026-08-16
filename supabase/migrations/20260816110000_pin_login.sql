@@ -12,7 +12,7 @@ BEGIN
   FROM profiles
   WHERE is_active = true
     AND pin_hash IS NOT NULL
-    AND pin_hash = crypt(p_pin, pin_hash);
+    AND pin_hash = extensions.crypt(p_pin, pin_hash);
 
   IF v_profile_id IS NULL THEN
     RAISE EXCEPTION 'Invalid PIN';
@@ -20,13 +20,13 @@ BEGIN
 
   RETURN v_profile_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- Alias for client API
 CREATE OR REPLACE FUNCTION sign_in_with_pin(p_pin TEXT)
 RETURNS UUID AS $$
   SELECT verify_pin(p_pin);
-$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public, extensions;
 
 -- Demo seed: set PIN 1234 for waiter (bcrypt hash of '1234')
 -- UPDATE profiles SET pin_hash = crypt('1234', gen_salt('bf')) WHERE role = 'waiter';

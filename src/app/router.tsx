@@ -1,4 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { needsSetup } from '@/lib/api/staff'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { AuthGuard, RoleGuard } from '@/components/layout/RoleGuard'
 import { WaiterLayout } from '@/components/layout/WaiterLayout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
@@ -8,6 +11,8 @@ import { DashboardPage } from '@/features/admin/DashboardPage'
 import { MenuManagementPage } from '@/features/admin/MenuManagementPage'
 import { ReportsPage } from '@/features/admin/ReportsPage'
 import { WaitersStatsPage } from '@/features/admin/WaitersStatsPage'
+import { SetupPage } from '@/features/setup/SetupPage'
+import { StaffPage } from '@/features/admin/StaffPage'
 import { SettingsPage } from '@/features/admin/SettingsPage'
 import { CashierPage } from '@/features/cashier/CashierPage'
 import { PaymentPage } from '@/features/cashier/PaymentPage'
@@ -20,7 +25,18 @@ import { useAuth } from '@/hooks/useAuth'
 
 function HomeRedirect() {
   const { user, loading, homePath } = useAuth()
-  if (loading) return null
+  const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      setSetupNeeded(false)
+      return
+    }
+    needsSetup().then(setSetupNeeded)
+  }, [])
+
+  if (loading || setupNeeded === null) return null
+  if (!user && setupNeeded) return <Navigate to="/setup" replace />
   return <Navigate to={user ? homePath : '/login'} replace />
 }
 
@@ -29,6 +45,8 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<HomeRedirect />} />
+
+        <Route path="/setup" element={<SetupPage />} />
 
         <Route element={<AuthGuard />}>
           <Route path="/login" element={<LoginPage />} />
@@ -60,6 +78,7 @@ export function AppRouter() {
             <Route path="/admin/menu" element={<MenuManagementPage />} />
             <Route path="/admin/reports" element={<ReportsPage />} />
             <Route path="/admin/waiters" element={<WaitersStatsPage />} />
+            <Route path="/admin/staff" element={<StaffPage />} />
             <Route path="/admin/settings" element={<SettingsPage />} />
           </Route>
         </Route>

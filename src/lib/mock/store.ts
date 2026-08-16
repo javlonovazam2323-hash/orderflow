@@ -565,6 +565,60 @@ class MockStore {
     this.state = defaultState()
     this.emit()
   }
+
+  bootstrapStaff() {
+    return USERS.map((u) => ({
+      email: u.email,
+      role: u.role,
+      password: u.password,
+      pin: u.pin,
+    }))
+  }
+
+  listStaff(): (Profile & { email: string; has_pin: boolean })[] {
+    return USERS.map((u) => ({
+      id: u.id,
+      full_name: u.full_name,
+      role: u.role,
+      is_active: u.is_active,
+      email: u.email,
+      has_pin: Boolean(u.pin),
+    }))
+  }
+
+  createStaff(input: { email: string; password: string; full_name: string; role: UserRole; pin?: string | null }) {
+    const id = uid()
+    USERS.push({
+      id,
+      full_name: input.full_name,
+      role: input.role,
+      is_active: true,
+      email: input.email,
+      password: input.password,
+      pin: input.pin ?? null,
+    })
+    this.emit()
+    return id
+  }
+
+  updateStaff(input: { profile_id: string; full_name?: string; role?: UserRole; is_active?: boolean }) {
+    const user = USERS.find((u) => u.id === input.profile_id)
+    if (!user) return
+    if (input.full_name !== undefined) user.full_name = input.full_name
+    if (input.role !== undefined) user.role = input.role
+    if (input.is_active !== undefined) user.is_active = input.is_active
+    this.emit()
+  }
+
+  resetStaffPassword(profileId: string, password: string) {
+    const user = USERS.find((u) => u.id === profileId)
+    if (user) user.password = password
+  }
+
+  setStaffPin(profileId: string, pin: string | null) {
+    const user = USERS.find((u) => u.id === profileId)
+    if (user) user.pin = pin
+  }
 }
 
 export const mockStore = new MockStore()

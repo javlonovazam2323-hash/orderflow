@@ -77,6 +77,9 @@ export async function updateSettings(input: SettingsInput): Promise<void> {
   const { data: existing } = await getSupabase().from('restaurant_settings').select('id').limit(1).single()
   const { error } = await getSupabase().from('restaurant_settings').update(input).eq('id', existing!.id)
   if (error) throw error
+  if (input.table_count !== undefined) {
+    await getSupabase().rpc('sync_restaurant_tables')
+  }
 }
 
 export async function getDailyReport(date: string): Promise<DailyReport> {

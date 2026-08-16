@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/Button'
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: '📊', end: true },
   { to: '/admin/menu', label: 'Menyu', icon: '📋' },
+  { to: '/admin/staff', label: 'Xodimlar', icon: '👤' },
   { to: '/admin/reports', label: 'Hisobot', icon: '📈' },
-  { to: '/admin/waiters', label: 'Ofitsiantlar', icon: '👥' },
+  { to: '/admin/waiters', label: 'KPI', icon: '📊' },
   { to: '/admin/settings', label: 'Sozlamalar', icon: '⚙️' },
 ]
 
@@ -60,7 +61,7 @@ export function AdminLayout() {
       </main>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-surface/95 backdrop-blur safe-bottom">
-        <div className="grid grid-cols-5 h-16">
+        <div className="grid grid-cols-6 h-16">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

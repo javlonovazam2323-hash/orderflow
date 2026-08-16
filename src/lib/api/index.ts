@@ -30,12 +30,20 @@ export async function signIn(email: string, password: string): Promise<Profile |
 export async function signInWithPin(pin: string): Promise<Profile | null> {
   if (USE_MOCK) return mockStore.signInWithPin(pin)
 
-  const { data, error } = await getSupabase().rpc('sign_in_with_pin', { p_pin: pin })
-  if (error || !data) return null
+  const sb = getSupabase()
+  const { data, error } = await sb.functions.invoke('pin-login', { body: { pin } })
+  if (error || !data?.token_hash) return null
 
-  // RPC returns profile id — fetch profile after custom auth flow
-  // Production: implement via Edge Function that validates pin_hash and returns session
-  const { data: profile } = await getSupabase().from('profiles').select('*').eq('id', data as string).single()
+  const { error: otpError } = await sb.auth.verifyOtp({
+    token_hash: data.token_hash as string,
+    type: 'email',
+  })
+  if (otpError) return null
+
+  const { data: { session } } = await sb.auth.getSession()
+  if (!session) return null
+
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single()
   return profile
 }
 

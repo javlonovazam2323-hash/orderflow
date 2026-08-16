@@ -39,6 +39,7 @@ export function DashboardPage() {
 
   const quickLinks = [
     { to: '/admin/menu', label: 'Menyu boshqaruvi', icon: '📋' },
+    { to: '/admin/staff', label: 'Xodimlar', icon: '👤' },
     { to: '/admin/reports', label: 'Kunlik hisobot', icon: '📈' },
     { to: '/admin/waiters', label: 'Ofitsiant KPI', icon: '👥' },
     { to: '/admin/settings', label: 'Sozlamalar', icon: '⚙️' },
@@ -64,7 +65,7 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
         {quickLinks.map((link) => (
           <Link
             key={link.to}
