@@ -6,6 +6,7 @@ interface CartState {
   orderId: string | null
   items: CartItem[]
   setContext: (tableId: string, orderId: string) => void
+  hydrateItems: (items: CartItem[]) => void
   addItem: (item: MenuItem, quantity?: number) => void
   updateQuantity: (menuItemId: string, quantity: number) => void
   updateNotes: (menuItemId: string, notes: string) => void
@@ -20,7 +21,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   orderId: null,
   items: [],
 
-  setContext: (tableId, orderId) => set({ tableId, orderId }),
+  setContext: (tableId, orderId) => set({ tableId, orderId, items: [] }),
+  hydrateItems: (items) => set({ items }),
 
   addItem: (menuItem, quantity = 1) => {
     const { items } = get()

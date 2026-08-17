@@ -114,6 +114,57 @@ export async function getDailyReport(date: string): Promise<DailyReport> {
 
 export async function getWaiterStats(date: string): Promise<WaiterStats[]> {
   if (USE_MOCK) return mockStore.getWaiterStats(date)
-  // Supabase RPC placeholder — mock handles demo
-  return []
+
+  const start = `${date}T00:00:00`
+  const end = `${date}T23:59:59`
+
+  const { data: orders, error } = await getSupabase()
+    .from('orders')
+    .select('waiter_id, status, total')
+    .not('waiter_id', 'is', null)
+    .gte('opened_at', start)
+    .lte('opened_at', end)
+
+  if (error) throw error
+
+  const rows = (orders ?? []).filter((o) => o.status !== 'cancelled')
+  const waiterIds = [...new Set(rows.map((o) => o.waiter_id as string))]
+  if (waiterIds.length === 0) return []
+
+  const { data: profiles } = await getSupabase()
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', waiterIds)
+
+  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]))
+
+  const grouped = new Map<string, WaiterStats>()
+  for (const order of rows) {
+    const waiterId = order.waiter_id as string
+    const current = grouped.get(waiterId) ?? {
+      waiter_id: waiterId,
+      waiter_name: nameById.get(waiterId) ?? 'Ofitsiant',
+      order_count: 0,
+      closed_count: 0,
+      open_count: 0,
+      total_sales: 0,
+      average_check: 0,
+    }
+    current.order_count += 1
+    if (order.status === 'paid') {
+      current.closed_count += 1
+      current.total_sales += Number(order.total)
+    }
+    if (order.status === 'open' || order.status === 'awaiting_payment' || order.status === 'draft') {
+      current.open_count += 1
+    }
+    grouped.set(waiterId, current)
+  }
+
+  return [...grouped.values()]
+    .map((row) => ({
+      ...row,
+      average_check: row.closed_count ? Math.round(row.total_sales / row.closed_count) : 0,
+    }))
+    .sort((a, b) => b.total_sales - a.total_sales)
 }

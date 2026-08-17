@@ -276,6 +276,8 @@ export interface WaiterStats {
   waiter_id: string
   waiter_name: string
   order_count: number
+  closed_count: number
+  open_count: number
   total_sales: number
   average_check: number
 }

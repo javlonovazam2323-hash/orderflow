@@ -42,7 +42,9 @@ export function WaitersStatsPage() {
                     <span className="text-2xl font-black text-muted w-8">#{i + 1}</span>
                     <div>
                       <p className="font-bold text-lg">{w.waiter_name}</p>
-                      <p className="text-sm text-muted">Bugun: {w.order_count} ta stol</p>
+                      <p className="text-sm text-muted">
+                        Jami: {w.order_count} · Yopilgan: {w.closed_count} · Ochiq: {w.open_count}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">

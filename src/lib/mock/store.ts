@@ -323,6 +323,8 @@ class MockStore {
       waiter_id: w.waiter_id,
       waiter_name: w.waiter_name,
       order_count: w.order_count,
+      closed_count: w.order_count,
+      open_count: 0,
       total_sales: w.total,
       average_check: w.order_count ? Math.round(w.total / w.order_count) : 0,
     }))

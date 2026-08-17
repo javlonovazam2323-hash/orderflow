@@ -146,6 +146,34 @@ export async function getOrderItems(orderId: string): Promise<OrderItem[]> {
   }))
 }
 
+export async function getDraftCartItems(orderId: string): Promise<CartItem[]> {
+  const rows = await getOrderItems(orderId)
+  return rows
+    .filter((row) => row.status === 'pending' && row.menu_item)
+    .map((row) => ({
+      menu_item_id: row.menu_item_id,
+      menu_item: row.menu_item as MenuItem,
+      quantity: row.quantity,
+      notes: row.notes ?? '',
+    }))
+}
+
+export async function upsertDraftCartItem(
+  orderId: string,
+  menuItemId: string,
+  quantity: number,
+  notes?: string,
+): Promise<void> {
+  if (USE_MOCK) return
+  const { error } = await getSupabase().rpc('upsert_draft_order_item', {
+    p_order_id: orderId,
+    p_menu_item_id: menuItemId,
+    p_quantity: quantity,
+    p_notes: notes ?? null,
+  })
+  if (error) throw error
+}
+
 export async function sendToKitchen(
   orderId: string,
   items: CartItem[],

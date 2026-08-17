@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { sendToKitchen } from '@/lib/api'
+import { getDraftCartItems, sendToKitchen, upsertDraftCartItem } from '@/lib/api'
 import { enqueue, isOnline } from '@/lib/offline/queue'
 import { USE_MOCK } from '@/lib/supabase'
 import { useCartStore } from '@/stores/cartStore'
@@ -24,6 +24,16 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [queued, setQueued] = useState(false)
   const [notesItem, setNotesItem] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
+
+  const persistDraft = async (menuItemId: string, quantity: number, notes: string) => {
+    if (!orderId || USE_MOCK) return
+    try {
+      await upsertDraftCartItem(orderId, menuItemId, quantity, notes)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Savat saqlanmadi')
+      useCartStore.getState().hydrateItems(await getDraftCartItems(orderId))
+    }
+  }
 
   const handleSend = async () => {
     if (!orderId || items.length === 0) return
@@ -67,7 +77,11 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   }
 
   const saveNotes = () => {
-    if (notesItem) updateNotes(notesItem, noteText)
+    if (notesItem) {
+      updateNotes(notesItem, noteText)
+      const row = useCartStore.getState().items.find((i) => i.menu_item_id === notesItem)
+      void persistDraft(notesItem, row?.quantity ?? 0, noteText)
+    }
     setNotesItem(null)
   }
 
@@ -100,14 +114,22 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         className="h-9 w-9 rounded-lg bg-surface border border-border font-bold"
-                        onClick={() => updateQuantity(item.menu_item_id, item.quantity - 1)}
+                        onClick={() => {
+                          const next = item.quantity - 1
+                          updateQuantity(item.menu_item_id, next)
+                          void persistDraft(item.menu_item_id, next, item.notes)
+                        }}
                       >
                         −
                       </button>
                       <span className="w-6 text-center font-bold">{item.quantity}</span>
                       <button
                         className="h-9 w-9 rounded-lg bg-brand-600 text-white font-bold"
-                        onClick={() => updateQuantity(item.menu_item_id, item.quantity + 1)}
+                        onClick={() => {
+                          const next = item.quantity + 1
+                          updateQuantity(item.menu_item_id, next)
+                          void persistDraft(item.menu_item_id, next, item.notes)
+                        }}
                       >
                         +
                       </button>
