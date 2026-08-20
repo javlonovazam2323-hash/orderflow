@@ -1,5 +1,6 @@
 import { USE_MOCK, getSupabase } from '@/lib/supabase'
 import { mockStore } from '@/lib/mock/store'
+import { getCurrentRestaurantId } from '@/lib/api/restaurant'
 import type {
   DailyReport,
   MenuCategory,
@@ -26,9 +27,10 @@ export async function getAdminMenuItems(): Promise<MenuItem[]> {
 export async function createCategory(input: MenuCategoryInput): Promise<MenuCategory> {
   if (USE_MOCK) return mockStore.createCategory(input)
   const slug = input.slug ?? input.name.toLowerCase().replace(/\s+/g, '-')
+  const restaurant_id = await getCurrentRestaurantId()
   const { data, error } = await getSupabase()
     .from('menu_categories')
-    .insert({ ...input, slug })
+    .insert({ ...input, slug, restaurant_id })
     .select()
     .single()
   if (error) throw error
@@ -49,7 +51,18 @@ export async function deleteCategory(id: string): Promise<void> {
 
 export async function createMenuItem(input: MenuItemInput): Promise<MenuItem> {
   if (USE_MOCK) return mockStore.createMenuItem(input)
-  const { data, error } = await getSupabase().from('menu_items').insert(input).select().single()
+  const { data: category, error: categoryError } = await getSupabase()
+    .from('menu_categories')
+    .select('restaurant_id')
+    .eq('id', input.category_id)
+    .single()
+  if (categoryError) throw categoryError
+  if (!category?.restaurant_id) throw new Error('Category restaurant_id is missing')
+  const { data, error } = await getSupabase()
+    .from('menu_items')
+    .insert({ ...input, restaurant_id: category.restaurant_id })
+    .select()
+    .single()
   if (error) throw error
   return data
 }
