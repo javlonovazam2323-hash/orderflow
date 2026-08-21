@@ -4,6 +4,7 @@ import { getDraftCartItems, sendToKitchen, upsertDraftCartItem } from '@/lib/api
 import { enqueue, isOnline } from '@/lib/offline/queue'
 import { USE_MOCK } from '@/lib/supabase'
 import { useCartStore } from '@/stores/cartStore'
+import { getActiveRestaurantId } from '@/stores/tenantStore'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { formatCurrency, generateIdempotencyKey } from '@/lib/format'
 import { Button } from '@/components/ui/Button'
@@ -50,7 +51,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
           id: crypto.randomUUID(),
           type: 'send_to_kitchen',
           idempotency_key: idempotencyKey,
-          payload: { order_id: orderId, items: [...items] },
+          payload: { order_id: orderId, items: [...items], restaurant_id: getActiveRestaurantId() ?? undefined },
         })
         refreshPending()
         setQueued(true)

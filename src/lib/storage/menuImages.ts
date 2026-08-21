@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase'
+import { requireRestaurantId } from '@/lib/tenant/scope'
 
 const BUCKET = 'menu-images'
 const MAX_DIM = 1200
@@ -36,7 +37,26 @@ async function maybeResize(file: File, quality = 0.88): Promise<Blob> {
 export async function uploadMenuImage(file: File, itemId?: string): Promise<string> {
   const compressed = await compressImage(file)
   const ext = 'webp'
-  const path = itemId ? `${itemId}/${Date.now()}.${ext}` : `new/${crypto.randomUUID()}.${ext}`
+  const restaurantId = requireRestaurantId()
+  const folder = itemId ?? 'new'
+  const path = `restaurants/${restaurantId}/menu/${folder}/${Date.now()}.${ext}`
+
+  const sb = getSupabase()
+  const { error } = await sb.storage.from(BUCKET).upload(path, compressed, {
+    contentType: 'image/webp',
+    upsert: true,
+  })
+  if (error) throw error
+
+  const { data } = sb.storage.from(BUCKET).getPublicUrl(path)
+  return data.publicUrl
+}
+
+/** Tenant logo. Path restaurants/{id}/logos/ is already allowed by menu_image_write_allowed. */
+export async function uploadRestaurantLogo(file: File): Promise<string> {
+  const compressed = await compressImage(file)
+  const restaurantId = requireRestaurantId()
+  const path = `restaurants/${restaurantId}/logos/${Date.now()}.webp`
 
   const sb = getSupabase()
   const { error } = await sb.storage.from(BUCKET).upload(path, compressed, {

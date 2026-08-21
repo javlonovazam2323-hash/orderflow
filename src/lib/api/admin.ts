@@ -1,6 +1,7 @@
 import { USE_MOCK, getSupabase } from '@/lib/supabase'
 import { mockStore } from '@/lib/mock/store'
 import { getCurrentRestaurantId } from '@/lib/api/restaurant'
+import { requireRestaurantId, withRestaurantId } from '@/lib/tenant/scope'
 import type {
   DailyReport,
   MenuCategory,
@@ -14,13 +15,13 @@ import type {
 
 export async function getAdminCategories(): Promise<MenuCategory[]> {
   if (USE_MOCK) return mockStore.getAdminCategories()
-  const { data } = await getSupabase().from('menu_categories').select('*').order('sort_order')
+  const { data } = await withRestaurantId(getSupabase().from('menu_categories').select('*')).order('sort_order')
   return data ?? []
 }
 
 export async function getAdminMenuItems(): Promise<MenuItem[]> {
   if (USE_MOCK) return mockStore.getAdminMenuItems()
-  const { data } = await getSupabase().from('menu_items').select('*').order('sort_order')
+  const { data } = await withRestaurantId(getSupabase().from('menu_items').select('*')).order('sort_order')
   return data ?? []
 }
 
@@ -39,13 +40,13 @@ export async function createCategory(input: MenuCategoryInput): Promise<MenuCate
 
 export async function updateCategory(id: string, input: MenuCategoryInput): Promise<void> {
   if (USE_MOCK) { mockStore.updateCategory(id, input); return }
-  const { error } = await getSupabase().from('menu_categories').update(input).eq('id', id)
+  const { error } = await withRestaurantId(getSupabase().from('menu_categories').update(input)).eq('id', id)
   if (error) throw error
 }
 
 export async function deleteCategory(id: string): Promise<void> {
   if (USE_MOCK) { mockStore.deleteCategory(id); return }
-  const { error } = await getSupabase().from('menu_categories').delete().eq('id', id)
+  const { error } = await withRestaurantId(getSupabase().from('menu_categories').delete()).eq('id', id)
   if (error) throw error
 }
 
@@ -58,6 +59,10 @@ export async function createMenuItem(input: MenuItemInput): Promise<MenuItem> {
     .single()
   if (categoryError) throw categoryError
   if (!category?.restaurant_id) throw new Error('Category restaurant_id is missing')
+  const restaurantId = await getCurrentRestaurantId()
+  if (category.restaurant_id !== restaurantId) {
+    throw new Error('Category is not in the active restaurant')
+  }
   const { data, error } = await getSupabase()
     .from('menu_items')
     .insert({ ...input, restaurant_id: category.restaurant_id })
@@ -69,29 +74,32 @@ export async function createMenuItem(input: MenuItemInput): Promise<MenuItem> {
 
 export async function updateMenuItem(id: string, input: MenuItemInput): Promise<void> {
   if (USE_MOCK) { mockStore.updateMenuItem(id, input); return }
-  const { error } = await getSupabase().from('menu_items').update(input).eq('id', id)
+  const { error } = await withRestaurantId(getSupabase().from('menu_items').update(input)).eq('id', id)
   if (error) throw error
 }
 
 export async function deleteMenuItem(id: string): Promise<void> {
   if (USE_MOCK) { mockStore.deleteMenuItem(id); return }
-  const { error } = await getSupabase().from('menu_items').delete().eq('id', id)
+  const { error } = await withRestaurantId(getSupabase().from('menu_items').delete()).eq('id', id)
   if (error) throw error
 }
 
 export async function getSettings(): Promise<RestaurantSettings> {
   if (USE_MOCK) return mockStore.getSettings()
-  const { data } = await getSupabase().from('restaurant_settings').select('*').limit(1).single()
-  return data!
+  const { data } = await withRestaurantId(getSupabase().from('restaurant_settings').select('*')).limit(1).maybeSingle()
+  if (!data) throw new Error('Restaurant settings not found')
+  return data
 }
 
 export async function updateSettings(input: SettingsInput): Promise<void> {
   if (USE_MOCK) { mockStore.updateSettings(input); return }
-  const { data: existing } = await getSupabase().from('restaurant_settings').select('id').limit(1).single()
-  const { error } = await getSupabase().from('restaurant_settings').update(input).eq('id', existing!.id)
+  const restaurantId = requireRestaurantId()
+  const { data: existing } = await withRestaurantId(getSupabase().from('restaurant_settings').select('id')).limit(1).maybeSingle()
+  if (!existing) throw new Error('Restaurant settings not found')
+  const { error } = await getSupabase().from('restaurant_settings').update(input).eq('id', existing.id).eq('restaurant_id', restaurantId)
   if (error) throw error
   if (input.table_count !== undefined) {
-    await getSupabase().rpc('sync_restaurant_tables')
+    await getSupabase().rpc('sync_restaurant_tables', { p_restaurant_id: restaurantId })
   }
 }
 
@@ -101,9 +109,7 @@ export async function getDailyReport(date: string): Promise<DailyReport> {
   const start = `${date}T00:00:00`
   const end = `${date}T23:59:59`
 
-  const { data: orders } = await getSupabase()
-    .from('orders')
-    .select('*, payments(*)')
+  const { data: orders } = await withRestaurantId(getSupabase().from('orders').select('*, payments(*)'))
     .eq('status', 'paid')
     .gte('closed_at', start)
     .lte('closed_at', end)
@@ -131,9 +137,7 @@ export async function getWaiterStats(date: string): Promise<WaiterStats[]> {
   const start = `${date}T00:00:00`
   const end = `${date}T23:59:59`
 
-  const { data: orders, error } = await getSupabase()
-    .from('orders')
-    .select('waiter_id, status, total')
+  const { data: orders, error } = await withRestaurantId(getSupabase().from('orders').select('waiter_id, status, total'))
     .not('waiter_id', 'is', null)
     .gte('opened_at', start)
     .lte('opened_at', end)

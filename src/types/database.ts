@@ -75,6 +75,10 @@ export interface TableSummary {
   reserved_for: string | null
   reservation_guests: number | null
   reservation_notes: string | null
+  public_token?: string | null
+  pending_guest_call_action?: string | null
+  pending_guest_call_waiter_id?: string | null
+  pending_guest_call_at?: string | null
 }
 
 export interface TableReservationInput {
@@ -304,6 +308,7 @@ export interface SettingsInput {
   name?: string
   phone?: string | null
   address?: string | null
+  logo_url?: string | null
   table_count?: number
   service_charge_percent?: number
   tax_percent?: number

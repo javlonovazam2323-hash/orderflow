@@ -11,6 +11,8 @@ import {
   upsertTable,
 } from '@/lib/api/tables'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { useTenant } from '@/hooks/useTenant'
+import { TableQrModal } from '@/features/admin/TableQrModal'
 import {
   DISPLAY_CATEGORY_META,
   TABLE_ZONES,
@@ -39,6 +41,7 @@ const STATUS_FILTERS: { id: TableFilterCategory; label: string }[] = [
 ]
 
 export function TablesPage() {
+  const { active } = useTenant()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tables, setTables] = useState<TableSummary[]>([])
   const [zoneFilter, setZoneFilter] = useState<string>('all')
@@ -51,6 +54,7 @@ export function TablesPage() {
   const [editTable, setEditTable] = useState<TableSummary | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [qrTable, setQrTable] = useState<TableSummary | null>(null)
   const detailLoadRef = useRef(0)
 
   const refresh = useCallback(async () => {
@@ -250,6 +254,17 @@ export function TablesPage() {
             } finally { setSaving(false) }
           }}
           saving={saving}
+          onQr={() => setQrTable(selected)}
+        />
+      )}
+
+      {qrTable?.public_token && active?.slug && (
+        <TableQrModal
+          restaurantName={active.name}
+          slug={active.slug}
+          tableNumber={qrTable.number}
+          publicToken={qrTable.public_token}
+          onClose={() => setQrTable(null)}
         />
       )}
 
@@ -346,7 +361,7 @@ function TableCard({ table, onClick }: { table: TableSummary; onClick: () => voi
 
 function TableDetailModal({
   table, items, loading, onClose, onRefresh, onEdit, onCleaning, onAvailable, onCheckIn,
-  onCancelReservation, saving,
+  onCancelReservation, saving, onQr,
 }: {
   table: TableSummary
   items: OrderItem[]
@@ -359,6 +374,7 @@ function TableDetailModal({
   onCheckIn: () => void
   onCancelReservation: () => void
   saving: boolean
+  onQr: () => void
 }) {
   const cat = getDisplayCategory(table.status)
   const meta = DISPLAY_CATEGORY_META[cat]
@@ -454,6 +470,7 @@ function TableDetailModal({
         )}
 
         <div className="flex flex-wrap gap-2 pt-2">
+          <Button size="sm" variant="outline" onClick={onQr} disabled={!table.public_token}>QR kod</Button>
           <Button size="sm" variant="outline" onClick={onEdit}>Tahrirlash</Button>
           <Button size="sm" variant="ghost" onClick={onRefresh}>Yangilash</Button>
           {cat === 'cleaning' ? (

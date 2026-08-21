@@ -9,6 +9,7 @@ export interface QueuedAction {
   payload: {
     order_id: string
     items: CartItem[]
+    restaurant_id?: string
   }
   created_at: string
   retries: number
@@ -26,6 +27,14 @@ export function getQueue(): QueuedAction[] {
 
 function saveQueue(queue: QueuedAction[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(queue))
+}
+
+export function clearQueueForOtherRestaurants(restaurantId: string | null) {
+  if (!restaurantId) {
+    saveQueue([])
+    return
+  }
+  saveQueue(getQueue().filter((action) => action.payload.restaurant_id === restaurantId))
 }
 
 export function enqueue(action: Omit<QueuedAction, 'created_at' | 'retries'>): QueuedAction {

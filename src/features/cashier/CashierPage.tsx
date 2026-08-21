@@ -4,6 +4,7 @@ import { getCashSession } from '@/lib/api'
 import { getOrderSummaries } from '@/lib/api/orders'
 import { useAuth } from '@/hooks/useAuth'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { RestaurantSwitcher } from '@/components/layout/RestaurantSwitcher'
 import { formatCurrency, formatTime } from '@/lib/format'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -42,7 +43,8 @@ export function CashierPage() {
           <h1 className="text-2xl font-bold">💰 Kassa</h1>
           <p className="text-muted text-sm">Bugungi tushum va ochiq hisoblar</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <RestaurantSwitcher />
           <Link to="/cashier/orders">
             <Button variant="outline">Zakazlar</Button>
           </Link>

@@ -59,6 +59,8 @@ export function TablesPage() {
           const meta = DISPLAY_CATEGORY_META[cat]
           const disabled = table.status === 'cleaning'
           const label = table.name ?? String(table.number)
+          const calling = table.pending_guest_call_action
+            && table.pending_guest_call_waiter_id === user?.id
 
           return (
             <button
@@ -70,13 +72,15 @@ export function TablesPage() {
                 'relative rounded-2xl border-2 flex flex-col items-start p-3 text-left gap-1 min-h-[100px]',
                 'transition-all active:scale-95 hover:shadow-md',
                 disabled && 'opacity-50 cursor-not-allowed',
-                cat === 'empty' ? 'border-slate-200 dark:border-slate-700 bg-surface hover:border-brand-500' : meta.color,
+                calling
+                  ? 'border-red-500 bg-red-50 dark:bg-red-950/40 animate-pulse'
+                  : cat === 'empty' ? 'border-slate-200 dark:border-slate-700 bg-surface hover:border-brand-500' : meta.color,
                 loading === table.id && 'opacity-60',
               )}
             >
               <div className="flex w-full items-center justify-between">
                 <span className="text-xl font-bold">{label}</span>
-                <span>{meta.emoji}</span>
+                <span>{calling ? '🔔' : meta.emoji}</span>
               </div>
               <Badge className={cn('text-[10px] px-1.5', TABLE_STATUS_COLORS[table.status] ?? meta.badge)}>
                 {TABLE_STATUS_LABELS[table.status] ?? meta.label}

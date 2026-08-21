@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { pin } = await req.json()
+    const { pin, restaurant_slug } = await req.json()
     if (!pin || String(pin).length < 4) {
       return json({ error: 'PIN 4 raqamdan iborat bo\'lishi kerak' }, 400)
     }
@@ -25,8 +25,32 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
+    let restaurantId: string | null = null
+    if (restaurant_slug) {
+      const { data: restaurant } = await supabaseAdmin
+        .from('restaurants')
+        .select('id')
+        .eq('slug', String(restaurant_slug))
+        .maybeSingle()
+      restaurantId = restaurant?.id ?? null
+      if (!restaurantId) {
+        return json({ error: 'PIN noto\'g\'ri' }, 401)
+      }
+    } else {
+      const { data: restaurants, error: listError } = await supabaseAdmin
+        .from('restaurants')
+        .select('id')
+        .eq('is_active', true)
+      if (listError) throw listError
+      if (!restaurants || restaurants.length !== 1) {
+        return json({ error: 'Restoran context kerak' }, 400)
+      }
+      restaurantId = restaurants[0].id
+    }
+
     const { data: profileId, error: pinError } = await supabaseAdmin.rpc('verify_pin', {
       p_pin: String(pin),
+      p_restaurant_id: restaurantId,
     })
     if (pinError || !profileId) {
       return json({ error: 'PIN noto\'g\'ri' }, 401)

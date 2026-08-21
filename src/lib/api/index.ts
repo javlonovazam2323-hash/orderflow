@@ -1,5 +1,7 @@
+import type { User as AuthUser } from '@supabase/supabase-js'
 import { getSupabase, USE_MOCK } from '@/lib/supabase'
 import { mockStore } from '@/lib/mock/store'
+import { withRestaurantId } from '@/lib/tenant/scope'
 import type {
   CartItem,
   CashSessionSummary,
@@ -16,6 +18,24 @@ import type {
   RestaurantTable,
 } from '@/types/database'
 
+/** Display-only identity when auth.users has a session but profiles INSERT is still service_role-only. */
+function syntheticIdentityProfile(user: AuthUser): Profile {
+  const meta = user.user_metadata?.full_name
+  const metaName = typeof meta === 'string' && meta.trim() ? meta.trim() : null
+  return {
+    id: user.id,
+    full_name: metaName || user.email?.split('@')[0] || 'Yangi foydalanuvchi',
+    role: 'admin',
+    is_active: true,
+  }
+}
+
+async function loadProfileOrSynthetic(user: AuthUser): Promise<Profile> {
+  const { data: profile } = await getSupabase().from('profiles').select('*').eq('id', user.id).maybeSingle()
+  if (profile) return profile
+  return syntheticIdentityProfile(user)
+}
+
 export async function signIn(email: string, password: string): Promise<Profile | null> {
   if (USE_MOCK) return mockStore.signIn(email, password)
 
@@ -23,15 +43,34 @@ export async function signIn(email: string, password: string): Promise<Profile |
   const { data, error } = await sb.auth.signInWithPassword({ email, password })
   if (error || !data.user) return null
 
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single()
-  return profile
+  return loadProfileOrSynthetic(data.user)
 }
 
-export async function signInWithPin(pin: string): Promise<Profile | null> {
+export async function signUp(email: string, password: string): Promise<{
+  profile: Profile | null
+  needsEmailConfirm: boolean
+}> {
+  if (USE_MOCK) throw new Error('Ro\'yxatdan o\'tish demo rejimda mavjud emas')
+
+  const sb = getSupabase()
+  const { data, error } = await sb.auth.signUp({ email, password })
+  if (error) throw error
+  if (!data.session || !data.user) {
+    return { profile: null, needsEmailConfirm: true }
+  }
+  return {
+    profile: await loadProfileOrSynthetic(data.user),
+    needsEmailConfirm: false,
+  }
+}
+
+export async function signInWithPin(pin: string, restaurantSlug?: string | null): Promise<Profile | null> {
   if (USE_MOCK) return mockStore.signInWithPin(pin)
 
   const sb = getSupabase()
-  const { data, error } = await sb.functions.invoke('pin-login', { body: { pin } })
+  const { data, error } = await sb.functions.invoke('pin-login', {
+    body: { pin, restaurant_slug: restaurantSlug ?? null },
+  })
   if (error || !data?.token_hash) return null
 
   const { error: otpError } = await sb.auth.verifyOtp({
@@ -62,23 +101,21 @@ export async function getSession(): Promise<Profile | null> {
   const { data: { session } } = await sb.auth.getSession()
   if (!session) return null
 
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single()
-  return profile
+  return loadProfileOrSynthetic(session.user)
 }
 
 export async function getSettings(): Promise<RestaurantSettings> {
   if (USE_MOCK) return mockStore.getSettings()
 
-  const { data } = await getSupabase().from('restaurant_settings').select('*').limit(1).single()
-  return data!
+  const { data } = await withRestaurantId(getSupabase().from('restaurant_settings').select('*')).limit(1).maybeSingle()
+  if (!data) throw new Error('Restaurant settings not found')
+  return data
 }
 
 export async function getCategories(): Promise<MenuCategory[]> {
   if (USE_MOCK) return mockStore.getCategories()
 
-  const { data } = await getSupabase()
-    .from('menu_categories')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('menu_categories').select('*'))
     .eq('is_active', true)
     .order('sort_order')
   return data ?? []
@@ -87,9 +124,7 @@ export async function getCategories(): Promise<MenuCategory[]> {
 export async function getMenuItems(): Promise<MenuItem[]> {
   if (USE_MOCK) return mockStore.getMenuItems()
 
-  const { data } = await getSupabase()
-    .from('menu_items')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('menu_items').select('*'))
     .eq('is_available', true)
     .order('sort_order')
   return data ?? []
@@ -98,7 +133,7 @@ export async function getMenuItems(): Promise<MenuItem[]> {
 export async function getTables(activeOnly = true): Promise<RestaurantTable[]> {
   if (USE_MOCK) return mockStore.getTables()
 
-  let query = getSupabase().from('restaurant_tables').select('*').order('number')
+  let query = withRestaurantId(getSupabase().from('restaurant_tables').select('*')).order('number')
   if (activeOnly) query = query.eq('is_active', true)
   const { data } = await query
   return data ?? []
@@ -107,9 +142,7 @@ export async function getTables(activeOnly = true): Promise<RestaurantTable[]> {
 export async function getTable(id: string): Promise<RestaurantTable | undefined> {
   if (USE_MOCK) return mockStore.getTable(id)
 
-  const { data } = await getSupabase()
-    .from('restaurant_tables')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('restaurant_tables').select('*'))
     .eq('id', id)
     .maybeSingle()
   return data ?? undefined
@@ -129,16 +162,14 @@ export async function openTableOrder(tableId: string, waiterId: string): Promise
 export async function getOrder(orderId: string): Promise<Order | null> {
   if (USE_MOCK) return mockStore.getOrder(orderId) ?? null
 
-  const { data } = await getSupabase().from('orders').select('*').eq('id', orderId).single()
+  const { data } = await withRestaurantId(getSupabase().from('orders').select('*')).eq('id', orderId).maybeSingle()
   return data
 }
 
 export async function getOrderItems(orderId: string): Promise<OrderItem[]> {
   if (USE_MOCK) return mockStore.getOrderItems(orderId)
 
-  const { data } = await getSupabase()
-    .from('order_items')
-    .select('*, menu_item:menu_items(*)')
+  const { data } = await withRestaurantId(getSupabase().from('order_items').select('*, menu_item:menu_items(*)'))
     .eq('order_id', orderId)
   return (data ?? []).map((row) => ({
     ...row,
@@ -199,9 +230,9 @@ export async function sendToKitchen(
 export async function getKitchenTickets(): Promise<KitchenTicket[]> {
   if (USE_MOCK) return mockStore.getKitchenTickets()
 
-  const { data: tickets } = await getSupabase()
-    .from('kitchen_tickets')
-    .select('*, table:restaurant_tables(*), waiter:profiles(*), order:orders(*)')
+  const { data: tickets } = await withRestaurantId(
+    getSupabase().from('kitchen_tickets').select('*, table:restaurant_tables(*), waiter:profiles(*), order:orders(*)'),
+  )
     .not('status', 'eq', 'cancelled')
     .order('sent_at')
 
@@ -209,9 +240,7 @@ export async function getKitchenTickets(): Promise<KitchenTicket[]> {
 
   const result: KitchenTicket[] = []
   for (const t of tickets) {
-    const { data: items } = await getSupabase()
-      .from('order_items')
-      .select('*, menu_item:menu_items(*)')
+    const { data: items } = await withRestaurantId(getSupabase().from('order_items').select('*, menu_item:menu_items(*)'))
       .eq('kitchen_ticket_id', t.id)
 
     result.push({
@@ -243,9 +272,7 @@ export async function updateKitchenStatus(
 export async function getNotifications(userId: string): Promise<Notification[]> {
   if (USE_MOCK) return mockStore.getNotifications(userId)
 
-  const { data } = await getSupabase()
-    .from('notifications')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('notifications').select('*'))
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -257,15 +284,13 @@ export async function markNotificationRead(id: string): Promise<void> {
     mockStore.markNotificationRead(id)
     return
   }
-  await getSupabase().from('notifications').update({ is_read: true }).eq('id', id)
+  await withRestaurantId(getSupabase().from('notifications').update({ is_read: true })).eq('id', id)
 }
 
 export async function getOpenOrders(): Promise<Order[]> {
   if (USE_MOCK) return mockStore.getOpenOrders()
 
-  const { data } = await getSupabase()
-    .from('orders')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('orders').select('*'))
     .in('status', ['open', 'awaiting_payment'])
     .order('opened_at', { ascending: false })
   return data ?? []
@@ -274,9 +299,7 @@ export async function getOpenOrders(): Promise<Order[]> {
 export async function getPayments(orderId: string): Promise<Payment[]> {
   if (USE_MOCK) return mockStore.getPayments(orderId)
 
-  const { data } = await getSupabase()
-    .from('payments')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('payments').select('*'))
     .eq('order_id', orderId)
     .order('created_at')
   return data ?? []
@@ -315,9 +338,7 @@ export async function getCashSession(): Promise<CashSessionSummary> {
   if (USE_MOCK) return mockStore.getCashSession()
 
   const today = new Date().toISOString().slice(0, 10)
-  const { data } = await getSupabase()
-    .from('cash_sessions')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('cash_sessions').select('*'))
     .eq('session_date', today)
     .maybeSingle()
 

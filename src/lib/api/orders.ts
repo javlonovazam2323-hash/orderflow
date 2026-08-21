@@ -1,4 +1,6 @@
 import { USE_MOCK, getSupabase } from '@/lib/supabase'
+import { requireRestaurantId, withRestaurantId } from '@/lib/tenant/scope'
+import { getActiveRestaurantId } from '@/stores/tenantStore'
 import type {
   CreatePhoneOrderInput,
   FulfillmentStatus,
@@ -21,16 +23,19 @@ export async function getOrderSummaries(filters?: {
   const sb = getSupabase()
   let rows: OrderSummary[] = []
 
-  const { data, error } = await sb.from('order_summaries').select('*').order('opened_at', { ascending: false })
+  const { data, error } = await withRestaurantId(sb.from('order_summaries').select('*')).order(
+    'opened_at',
+    { ascending: false },
+  )
   if (!error && data) {
     rows = data as OrderSummary[]
   } else {
-    const { data: orders, error: ordersError } = await sb.from('orders').select('*').order('opened_at', { ascending: false })
+    const { data: orders, error: ordersError } = await withRestaurantId(sb.from('orders').select('*')).order('opened_at', { ascending: false })
     if (ordersError) throw ordersError
     rows = await Promise.all((orders ?? []).map(async (o) => {
-      const { data: payments } = await sb.from('payments').select('amount').eq('order_id', o.id).eq('status', 'completed')
+      const { data: payments } = await withRestaurantId(sb.from('payments').select('amount')).eq('order_id', o.id).eq('status', 'completed')
       const paid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-      const { count } = await sb.from('order_items').select('*', { count: 'exact', head: true }).eq('order_id', o.id)
+      const { count } = await withRestaurantId(sb.from('order_items').select('*', { count: 'exact', head: true })).eq('order_id', o.id)
       return {
         ...o,
         table_number: null,
@@ -83,15 +88,15 @@ function matchesStatusGroup(o: OrderSummary, group: string): boolean {
 
 export async function getOrderSummary(orderId: string): Promise<OrderSummary | null> {
   if (USE_MOCK) return null
-  const { data } = await getSupabase().from('order_summaries').select('*').eq('id', orderId).maybeSingle()
+  const { data } = await withRestaurantId(getSupabase().from('order_summaries').select('*'))
+    .eq('id', orderId)
+    .maybeSingle()
   return data as OrderSummary | null
 }
 
 export async function getOrderEvents(orderId: string): Promise<OrderEvent[]> {
   if (USE_MOCK) return []
-  const { data } = await getSupabase()
-    .from('order_events')
-    .select('*')
+  const { data } = await withRestaurantId(getSupabase().from('order_events').select('*'))
     .eq('order_id', orderId)
     .order('created_at')
   return data ?? []
@@ -115,6 +120,7 @@ export async function createPhoneOrder(input: CreatePhoneOrderInput): Promise<st
     p_payment_method: input.payment_method ?? null,
     p_prepayment_amount: input.prepayment_amount ?? 0,
     p_idempotency_key: input.idempotency_key ?? crypto.randomUUID(),
+    p_restaurant_id: requireRestaurantId(),
   })
   if (error) throw error
   return data as string
@@ -145,10 +151,19 @@ export async function markDelivered(orderId: string): Promise<void> {
 
 export async function getCouriers(): Promise<Profile[]> {
   if (USE_MOCK) return []
-  const { data } = await getSupabase()
+  const restaurantId = getActiveRestaurantId()
+  const sb = getSupabase()
+  if (!restaurantId) return []
+  const { data: memberIds } = await sb.rpc('list_member_user_ids_for_roles', {
+    p_restaurant_id: restaurantId,
+    p_roles: ['waiter', 'cashier', 'admin'],
+  })
+  const ids = (memberIds ?? []) as string[]
+  if (ids.length === 0) return []
+  const { data } = await sb
     .from('profiles')
     .select('*')
-    .in('role', ['waiter', 'cashier', 'admin'])
+    .in('id', ids)
     .eq('is_active', true)
     .order('full_name')
   return data ?? []

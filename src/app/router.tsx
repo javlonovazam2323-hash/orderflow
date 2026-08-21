@@ -13,6 +13,7 @@ import { MenuManagementPage } from '@/features/admin/MenuManagementPage'
 import { ReportsPage } from '@/features/admin/ReportsPage'
 import { WaitersStatsPage } from '@/features/admin/WaitersStatsPage'
 import { SetupPage } from '@/features/setup/SetupPage'
+import { GuestTablePage } from '@/features/guest/GuestTablePage'
 import { StaffPage } from '@/features/admin/StaffPage'
 import { SettingsPage } from '@/features/admin/SettingsPage'
 import { OrdersPage as AdminOrdersPage } from '@/features/orders/OrdersPage'
@@ -25,9 +26,13 @@ import { MenuPage } from '@/features/waiter/MenuPage'
 import { OrdersPage } from '@/features/waiter/OrdersPage'
 import { ProfilePage } from '@/features/waiter/ProfilePage'
 import { useAuth } from '@/hooks/useAuth'
+import { useTenant, useTenantReady } from '@/hooks/useTenant'
+import { uniqueMemberships } from '@/lib/tenant/pickActive'
 
 function HomeRedirect() {
   const { user, loading, homePath } = useAuth()
+  const { memberships } = useTenant()
+  const tenantReady = useTenantReady(user?.id)
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -39,6 +44,8 @@ function HomeRedirect() {
   }, [])
 
   if (loading || setupNeeded === null) return null
+  if (user && !tenantReady) return null
+  if (user && uniqueMemberships(memberships, user.id, user.role).length === 0) return <Navigate to="/setup" replace />
   if (!user && setupNeeded) return <Navigate to="/setup" replace />
   return <Navigate to={user ? homePath : '/login'} replace />
 }
@@ -50,10 +57,14 @@ export function AppRouter() {
         <Route path="/" element={<HomeRedirect />} />
 
         <Route path="/setup" element={<SetupPage />} />
+        <Route path="/guest/:slug/:token" element={<GuestTablePage />} />
+        <Route path="/r/:slug/table/:token" element={<GuestTablePage />} />
 
         <Route element={<AuthGuard />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/pin" element={<PinLoginPage />} />
+          <Route path="/r/:slug/login" element={<LoginPage />} />
+          <Route path="/r/:slug/login/pin" element={<PinLoginPage />} />
         </Route>
 
         <Route element={<RoleGuard allowed={['waiter']} />}>

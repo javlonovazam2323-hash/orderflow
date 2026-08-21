@@ -1,7 +1,10 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, Link } from 'react-router-dom'
 import { cn } from '@/lib/format'
 import { useAuth } from '@/hooks/useAuth'
+import { useTenant } from '@/hooks/useTenant'
+import { canCreateRestaurant } from '@/lib/tenant/access'
 import { Button } from '@/components/ui/Button'
+import { RestaurantSwitcher } from '@/components/layout/RestaurantSwitcher'
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: '📊', end: true },
@@ -16,6 +19,8 @@ const navItems = [
 
 export function AdminLayout() {
   const { signOut } = useAuth()
+  const { memberships } = useTenant()
+  const showNewRestaurant = memberships.length === 1 && canCreateRestaurant(memberships)
 
   return (
     <div className="min-h-full flex flex-col md:flex-row">
@@ -24,6 +29,14 @@ export function AdminLayout() {
         <div className="p-5 border-b border-border">
           <p className="font-bold text-lg">OrderFlow</p>
           <p className="text-xs text-muted">Admin panel</p>
+          <div className="mt-2">
+            <RestaurantSwitcher className="block w-full" />
+            {showNewRestaurant && (
+              <Link to="/setup" className="mt-2 inline-block text-xs font-medium text-brand-600 hover:underline">
+                + Yangi restoran
+              </Link>
+            )}
+          </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => (
@@ -53,9 +66,14 @@ export function AdminLayout() {
       </aside>
 
       {/* Mobile header + bottom nav */}
-      <div className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 border-b border-border bg-surface/95 backdrop-blur">
+      <div className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface/95 backdrop-blur">
         <p className="font-bold">OrderFlow Admin</p>
-        <Button variant="ghost" size="sm" onClick={() => signOut()}>Chiqish</Button>
+        <div className="flex items-center gap-2">
+          {showNewRestaurant && (
+            <Link to="/setup" className="text-xs font-medium text-brand-600">+ Restoran</Link>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => signOut()}>Chiqish</Button>
+        </div>
       </div>
 
       <main className="flex-1 md:ml-56 pb-20 md:pb-6">

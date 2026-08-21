@@ -14,13 +14,24 @@ DECLARE
   v_menu menu_items%ROWTYPE;
   v_item_id UUID;
 BEGIN
-  IF get_user_role() NOT IN ('admin', 'waiter') THEN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  IF COALESCE(get_user_role()::text, '') NOT IN ('admin', 'waiter') THEN
     RAISE EXCEPTION 'Permission denied';
   END IF;
 
   SELECT * INTO v_order FROM orders WHERE id = p_order_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found';
+  END IF;
+  IF NOT (
+    is_admin()
+    OR v_order.waiter_id = auth.uid()
+    OR v_order.created_by = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Permission denied';
   END IF;
   IF v_order.status NOT IN ('open', 'draft') THEN
     RAISE EXCEPTION 'Order cannot accept draft items';
@@ -79,6 +90,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+REVOKE ALL ON FUNCTION upsert_draft_order_item(UUID, UUID, INT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION upsert_draft_order_item(UUID, UUID, INT, TEXT) TO authenticated;
 
 CREATE OR REPLACE FUNCTION send_to_kitchen(

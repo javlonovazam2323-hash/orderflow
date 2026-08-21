@@ -1,15 +1,22 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent } from '@/components/ui/Card'
 import { useAuth } from '@/hooks/useAuth'
 import { DEMO_USERS } from '@/lib/constants'
 import { USE_MOCK } from '@/lib/supabase'
+import { useTenantStore } from '@/stores/tenantStore'
 
 export function LoginPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
+  const { slug } = useParams()
+  const setHintedSlug = useTenantStore((s) => s.setHintedSlug)
+
+  useEffect(() => {
+    if (slug) setHintedSlug(slug)
+  }, [slug, setHintedSlug])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -83,6 +90,12 @@ export function LoginPage() {
               className="block text-center text-sm text-brand-600 font-medium hover:underline"
             >
               🔐 PIN bilan tez kirish (ofitsiant)
+            </Link>
+            <Link
+              to="/setup"
+              className="block text-center text-sm text-slate-500 font-medium hover:text-brand-600 hover:underline"
+            >
+              Yangi restoran ochish
             </Link>
           </CardContent>
         </Card>

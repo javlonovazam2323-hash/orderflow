@@ -2,12 +2,17 @@ import { useEffect } from 'react'
 import { subscribeMock } from '@/lib/api'
 import { REALTIME_TABLES } from '@/lib/api/tables'
 import { getSupabase, USE_MOCK } from '@/lib/supabase'
+import { useTenantStore } from '@/stores/tenantStore'
 
 export function useRealtimeRefresh(onRefresh: () => void, deps: unknown[] = []) {
+  const restaurantId = useTenantStore((s) => s.active?.restaurantId)
+
   useEffect(() => {
     if (USE_MOCK) {
       return subscribeMock(onRefresh)
     }
+
+    if (!restaurantId) return
 
     const sb = getSupabase()
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -20,16 +25,21 @@ export function useRealtimeRefresh(onRefresh: () => void, deps: unknown[] = []) 
       }, 150)
     }
 
-    const channel = sb
-      .channel('orderflow-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'table_reservations' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kitchen_tickets' }, scheduleRefresh)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, scheduleRefresh)
-      .subscribe()
+    const filter = `restaurant_id=eq.${restaurantId}`
+    let channel = sb.channel(`orderflow-live-${restaurantId}`)
+    for (const table of REALTIME_TABLES) {
+      channel = channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table, filter },
+        scheduleRefresh,
+      )
+    }
+    channel = channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'notifications', filter },
+      scheduleRefresh,
+    )
+    channel.subscribe()
 
     onRefresh()
 
@@ -38,7 +48,7 @@ export function useRealtimeRefresh(onRefresh: () => void, deps: unknown[] = []) 
       sb.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, [restaurantId, ...deps])
 }
 
 export { REALTIME_TABLES }

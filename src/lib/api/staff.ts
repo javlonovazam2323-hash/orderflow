@@ -1,5 +1,6 @@
 import { getSupabase, USE_MOCK } from '@/lib/supabase'
 import { mockStore } from '@/lib/mock/store'
+import { getActiveRestaurantId } from '@/stores/tenantStore'
 import type { Profile, UserRole } from '@/types/database'
 
 export interface StaffMember extends Profile {
@@ -31,8 +32,13 @@ export interface BootstrapResult {
   pin: string | null
 }
 
+function withTenantHint(body: Record<string, unknown>): Record<string, unknown> {
+  const restaurant_id = getActiveRestaurantId()
+  return restaurant_id ? { ...body, restaurant_id } : body
+}
+
 async function invokeFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await getSupabase().functions.invoke(name, { body })
+  const { data, error } = await getSupabase().functions.invoke(name, { body: withTenantHint(body) })
   if (error) throw error
   if (data?.error) throw new Error(data.error as string)
   return data as T

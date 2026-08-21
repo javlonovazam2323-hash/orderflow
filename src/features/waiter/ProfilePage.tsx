@@ -3,6 +3,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ROLE_LABELS } from '@/lib/constants'
+import { RestaurantSwitcher } from '@/components/layout/RestaurantSwitcher'
 import { USE_MOCK } from '@/lib/supabase'
 import { mockStore } from '@/lib/mock/store'
 
@@ -18,6 +19,7 @@ export function ProfilePage() {
         <CardContent className="pt-4 space-y-2">
           <p className="text-lg font-semibold">{user?.full_name}</p>
           <p className="text-muted">{user?.role ? ROLE_LABELS[user.role] : ''}</p>
+          <RestaurantSwitcher className="mt-2 block" />
         </CardContent>
       </Card>
 

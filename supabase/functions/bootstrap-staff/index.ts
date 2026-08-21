@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +30,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({}))
+    const body = await req.json().catch(() => ({})) as {
+      setupSecret?: string
+      restaurant_slug?: string
+    }
     const setupSecret = String(body.setupSecret ?? '')
     const expectedSecret = Deno.env.get('SETUP_SECRET') ?? ''
 
@@ -39,6 +42,23 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
+    const { data: needsSetup, error: setupError } = await supabaseAdmin.rpc('needs_setup')
+    if (setupError) throw setupError
+
+    if (expectedSecret) {
+      if (setupSecret !== expectedSecret) {
+        return json({ error: 'Forbidden' }, 403)
+      }
+    } else if (!needsSetup) {
+      // Open bootstrap is only allowed while no restaurant admin exists.
+      return json({ error: 'Forbidden' }, 403)
+    }
+
+    const restaurantId = await resolveRestaurantId(supabaseAdmin, body.restaurant_slug)
+    if (!restaurantId) {
+      return json({ error: 'Restoran topilmadi' }, 400)
+    }
+
     const { data: usersList, error: listError } = await supabaseAdmin.auth.admin.listUsers()
     if (listError) throw listError
 
@@ -46,14 +66,15 @@ Deno.serve(async (req) => {
       (usersList.users ?? []).filter((u) => u.email).map((u) => [u.email!.toLowerCase(), u]),
     )
 
-    const { data: existingProfiles } = await supabaseAdmin
-      .from('profiles')
-      .select('id, role')
+    const { data: existingMembers } = await supabaseAdmin
+      .from('restaurant_members')
+      .select('user_id, role')
+      .eq('restaurant_id', restaurantId)
 
-    const profileByRole = new Map((existingProfiles ?? []).map((p) => [p.role, p.id]))
+    const memberByRole = new Map((existingMembers ?? []).map((m) => [m.role, m.user_id]))
     const staffToCreate = DEFAULT_STAFF.filter((staff) => {
       const hasEmail = byEmail.has(staff.email.toLowerCase())
-      const hasRole = profileByRole.has(staff.role)
+      const hasRole = memberByRole.has(staff.role)
       return !hasEmail || !hasRole
     })
 
@@ -66,52 +87,57 @@ Deno.serve(async (req) => {
 
     for (const staff of staffToCreate) {
       try {
-      let userId: string
-      const existing = byEmail.get(staff.email.toLowerCase())
+        let userId: string
+        const existing = byEmail.get(staff.email.toLowerCase())
 
-      if (existing) {
-        userId = existing.id
-        await supabaseAdmin.auth.admin.updateUserById(userId, {
-          password: staff.password,
-          email_confirm: true,
-        })
-      } else {
-        const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
+        if (existing) {
+          userId = existing.id
+        } else {
+          const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
+            email: staff.email,
+            password: staff.password,
+            email_confirm: true,
+          })
+          if (error) throw error
+          userId = newUser.user.id
+        }
+
+        const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
+          {
+            id: userId,
+            full_name: staff.full_name,
+            role: staff.role,
+            is_active: true,
+          },
+          { onConflict: 'id' },
+        )
+        if (profileError) throw profileError
+
+        const { error: memberError } = await supabaseAdmin.from('restaurant_members').upsert(
+          {
+            restaurant_id: restaurantId,
+            user_id: userId,
+            role: staff.role,
+            is_active: true,
+          },
+          { onConflict: 'restaurant_id,user_id' },
+        )
+        if (memberError) throw memberError
+
+        if (staff.pin) {
+          const { error: pinError } = await supabaseAdmin.rpc('set_profile_pin', {
+            p_profile_id: userId,
+            p_pin: staff.pin,
+          })
+          if (pinError) throw pinError
+        }
+
+        created.push({
           email: staff.email,
-          password: staff.password,
-          email_confirm: true,
-        })
-        if (error) throw error
-        userId = newUser.user.id
-      }
-
-      const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
-        {
-          id: userId,
-          full_name: staff.full_name,
           role: staff.role,
-          is_active: true,
-        },
-        { onConflict: 'id' },
-      )
-      if (profileError) throw profileError
-
-      if (staff.pin) {
-        const { error: pinError } = await supabaseAdmin.rpc('set_profile_pin', {
-          p_profile_id: userId,
-          p_pin: staff.pin,
+          password: staff.password,
+          pin: staff.pin,
         })
-        if (pinError) throw pinError
-      } else {
-        await supabaseAdmin.from('profiles').update({ pin_hash: null }).eq('id', userId)
-      }
-
-      created.push({
-        email: staff.email,
-        role: staff.role,
-        password: staff.password,
-        pin: staff.pin,
-      })
       } catch (err) {
         errors.push({ email: staff.email, error: formatError(err) })
       }
@@ -128,6 +154,24 @@ Deno.serve(async (req) => {
     return json({ error: message }, 500)
   }
 })
+
+async function resolveRestaurantId(
+  supabaseAdmin: SupabaseClient,
+  slug?: string,
+): Promise<string | null> {
+  if (slug) {
+    const { data } = await supabaseAdmin
+      .from('restaurants')
+      .select('id')
+      .eq('slug', String(slug))
+      .maybeSingle()
+    return data?.id ?? null
+  }
+
+  const { data: restaurants } = await supabaseAdmin.from('restaurants').select('id')
+  if (!restaurants || restaurants.length !== 1) return null
+  return restaurants[0].id
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

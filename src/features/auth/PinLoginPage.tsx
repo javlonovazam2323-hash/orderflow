@@ -1,17 +1,24 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '@/lib/format'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
+import { useTenantStore } from '@/stores/tenantStore'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'] as const
 
 export function PinLoginPage() {
   const { signInWithPin } = useAuth()
   const navigate = useNavigate()
+  const { slug } = useParams()
+  const setHintedSlug = useTenantStore((s) => s.setHintedSlug)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (slug) setHintedSlug(slug)
+  }, [slug, setHintedSlug])
 
   const handleKey = (key: string) => {
     setError('')
@@ -28,7 +35,7 @@ export function PinLoginPage() {
       return
     }
     setLoading(true)
-    const ok = await signInWithPin(pin)
+    const ok = await signInWithPin(pin, slug ?? null)
     setLoading(false)
     if (!ok) {
       setError('PIN noto\'g\'ri')

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { getKitchenTickets, updateKitchenStatus } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { RestaurantSwitcher } from '@/components/layout/RestaurantSwitcher'
 import { elapsedMinutes, formatTime } from '@/lib/format'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -73,9 +74,12 @@ export function KitchenPage() {
           <h1 className="text-2xl font-bold">🍳 Oshxona</h1>
           <p className="text-slate-400 text-sm">{active.length} aktiv · {ready.length} tayyor</p>
         </div>
-        <Button variant="ghost" size="sm" className="text-white" onClick={() => signOut()}>
-          Chiqish
-        </Button>
+        <div className="flex items-center gap-2">
+          <RestaurantSwitcher className="text-slate-900" />
+          <Button variant="ghost" size="sm" className="text-white" onClick={() => signOut()}>
+            Chiqish
+          </Button>
+        </div>
       </header>
 
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">

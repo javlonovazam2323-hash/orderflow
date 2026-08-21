@@ -1,5 +1,6 @@
 import { getSupabase, USE_MOCK } from '@/lib/supabase'
 import { mockStore } from '@/lib/mock/store'
+import { requireRestaurantId, withRestaurantId } from '@/lib/tenant/scope'
 import type {
   OrderItem,
   TableReservationInput,
@@ -10,7 +11,7 @@ import type {
 export async function getTableSummaries(activeOnly = true): Promise<TableSummary[]> {
   if (USE_MOCK) return mockStore.getTableSummaries(activeOnly)
 
-  let query = getSupabase().from('table_summaries').select('*').order('number')
+  let query = withRestaurantId(getSupabase().from('table_summaries').select('*')).order('number')
   if (activeOnly) query = query.eq('is_active', true)
   const { data, error } = await query
   if (error) throw error
@@ -23,9 +24,7 @@ export async function getTableSummaryById(id: string): Promise<TableSummary | nu
     return rows.find((r) => r.id === id) ?? null
   }
 
-  const { data, error } = await getSupabase()
-    .from('table_summaries')
-    .select('*')
+  const { data, error } = await withRestaurantId(getSupabase().from('table_summaries').select('*'))
     .eq('id', id)
     .maybeSingle()
   if (error) throw error
@@ -74,6 +73,7 @@ export async function upsertTable(input: TableUpsertInput): Promise<string> {
     p_name: input.name ?? null,
     p_is_active: input.is_active ?? true,
     p_table_id: input.table_id ?? null,
+    p_restaurant_id: requireRestaurantId(),
   })
   if (error) throw error
   return data as string
@@ -115,6 +115,10 @@ function normalizeSummary(row: Record<string, unknown>): TableSummary {
     reserved_for: (row.reserved_for as string | null) ?? null,
     reservation_guests: row.reservation_guests != null ? Number(row.reservation_guests) : null,
     reservation_notes: (row.reservation_notes as string | null) ?? null,
+    public_token: (row.public_token as string | null) ?? null,
+    pending_guest_call_action: (row.pending_guest_call_action as string | null) ?? null,
+    pending_guest_call_waiter_id: (row.pending_guest_call_waiter_id as string | null) ?? null,
+    pending_guest_call_at: (row.pending_guest_call_at as string | null) ?? null,
   }
 }
 
@@ -125,4 +129,5 @@ export const REALTIME_TABLES = [
   'payments',
   'table_reservations',
   'kitchen_tickets',
+  'order_events',
 ] as const

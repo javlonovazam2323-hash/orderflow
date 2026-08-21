@@ -1,8 +1,8 @@
 -- Phase 3: tenant-scoped unique keys + ON CONFLICT retarget + restaurant_id NOT NULL
 -- + composite child FKs.
 --
--- STATUS: READY FOR APPROVAL — DO NOT AUTO-APPLY TO PRODUCTION.
--- Apply only after explicit user TASDIQ. This file is one transaction.
+-- STATUS: APPLIED TO PRODUCTION (ljkgqzpbvzdgnempalxb) after explicit TASDIQ.
+-- This file is one transaction. Abort (RAISE) rolls the whole migration back.
 --
 -- Prerequisites (already done):
 --   Phase 1 foundation, Phase 2 backfill, Phase 3A write compatibility
@@ -27,6 +27,7 @@ DECLARE
   v_null int;
   v_orphan int;
   v_mismatch int;
+  v_dup int;
 BEGIN
   SELECT COALESCE(sum(n), 0) INTO v_null FROM (
     SELECT count(*) FILTER (WHERE restaurant_id IS NULL) AS n FROM restaurant_settings
@@ -84,6 +85,34 @@ BEGIN
 
   IF v_mismatch <> 0 THEN
     RAISE EXCEPTION 'Phase 3 abort: parent-child restaurant_id mismatch count = %', v_mismatch;
+  END IF;
+
+  SELECT count(*) INTO v_dup FROM (
+    SELECT 1 FROM restaurant_tables GROUP BY restaurant_id, number HAVING count(*) > 1
+  ) d;
+  IF v_dup <> 0 THEN
+    RAISE EXCEPTION 'Phase 3 abort: duplicate restaurant_tables (restaurant_id, number) = %', v_dup;
+  END IF;
+
+  SELECT count(*) INTO v_dup FROM (
+    SELECT 1 FROM menu_categories GROUP BY restaurant_id, slug HAVING count(*) > 1
+  ) d;
+  IF v_dup <> 0 THEN
+    RAISE EXCEPTION 'Phase 3 abort: duplicate menu_categories (restaurant_id, slug) = %', v_dup;
+  END IF;
+
+  SELECT count(*) INTO v_dup FROM (
+    SELECT 1 FROM orders GROUP BY restaurant_id, order_number HAVING count(*) > 1
+  ) d;
+  IF v_dup <> 0 THEN
+    RAISE EXCEPTION 'Phase 3 abort: duplicate orders (restaurant_id, order_number) = %', v_dup;
+  END IF;
+
+  SELECT count(*) INTO v_dup FROM (
+    SELECT 1 FROM cash_sessions GROUP BY restaurant_id, session_date HAVING count(*) > 1
+  ) d;
+  IF v_dup <> 0 THEN
+    RAISE EXCEPTION 'Phase 3 abort: duplicate cash_sessions (restaurant_id, session_date) = %', v_dup;
   END IF;
 END $$;
 

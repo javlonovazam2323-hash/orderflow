@@ -21,3 +21,15 @@ site_url = "http://localhost:5173"
 
 [realtime]
 enabled = true
+
+[functions.pin-login]
+verify_jwt = false
+
+[functions.bootstrap-staff]
+verify_jwt = false
+
+[functions.manage-staff]
+verify_jwt = true
+
+[functions.e2e-onboarding]
+verify_jwt = true
